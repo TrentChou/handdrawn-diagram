@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<!--
+  Concept Palette Cheatsheet — full visual lookup of all Agent Team concepts.
+  Locks every concept (User, Orchestrator, Worker, Verifier, Memory 三层, Sandbox,
+  Skill, External, Error, IM, LLM, Tools, Plan/Round, ...) to one of the 9
+  palette slots, with default shape and complete alias list.
+
+  Render once and keep the PNG in this same directory as the canonical
+  reference. Re-render only when palette / alias dictionary changes.
+
+  Canvas: 2400 × 1780.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fdfdfa;
+    font-family: 'Times New Roman', Times, 'Songti SC', 'STSong', 'SimSun', '宋体', 'Noto Serif SC', serif; }
+  .stage { position: relative; width: 2400px; height: 1780px; background: #fdfdfa; }
+  canvas { display: block; }
+  .label { position: absolute; pointer-events: none; line-height: 1.32; }
+  .ti { font-family: 'Times New Roman', Times, 'STZhongsong', '华文中宋', 'Songti SC', 'SimSun', '宋体', 'Noto Serif SC', serif; font-weight: 700; }
+  .bd { font-family: 'Times New Roman', Times, 'Songti SC', 'STSong', 'SimSun', '宋体', 'Noto Serif SC', serif; font-weight: 400; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"
+        integrity="sha384-1NLkwxMO2sOqcq7rQkFBhIAUJtbt8ziLxhVKVgKfFGMEU8pF+GEq5LVogviveup6"
+        crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="stage">
+  <canvas id="c" width="2400" height="1780"></canvas>
+  <div id="labels"></div>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const rc = rough.canvas(canvas);
+
+const FONT_TI = `'Times New Roman', Times, 'STZhongsong', '华文中宋', 'Songti SC', 'SimSun', '宋体', 'Noto Serif SC', serif`;
+const FONT_BD = `'Times New Roman', Times, 'Songti SC', 'STSong', 'SimSun', '宋体', 'Noto Serif SC', serif`;
+
+// =================== Palette ===================
+const C = {
+  user:     { stroke: '#1f5582', fill: '#e3ebf2' },
+  im:       { stroke: '#106668', fill: '#dde8e7' },
+  agent:    { stroke: '#a04a1f', fill: '#f3e2cf' },
+  subagent: { stroke: '#7d4f0a', fill: '#f4eacd' },
+  llm:      { stroke: '#4a3f8c', fill: '#e6e2ef' },
+  tools:    { stroke: '#2f6b3c', fill: '#dfead9' },
+  memory:   { stroke: '#6e554a', fill: '#ede2d5' },
+  external: { stroke: '#4f5359', fill: '#e9e7e3' },
+  error:    { stroke: '#a52928', fill: '#f0d8d2' },
+  flow:     '#3a3530',
+  bg:       '#fdfdfa',
+  title:    '#2a2520',
+  subtitle: '#5a544f',
+  caption:  '#7a746e',
+};
+
+const opts = (color, o = {}) => Object.assign({
+  stroke: color.stroke, fill: color.fill,
+  fillStyle: 'solid',
+  strokeWidth: 2.4, roughness: 1.6, bowing: 1.4,
+}, o);
+
+// =================== Helpers ===================
+const L = document.getElementById('labels');
+function lbl({ text, sub, x, y, w, color, size=24, subSize=16, align='left' }) {
+  const div = document.createElement('div');
+  div.className = 'label';
+  div.style.left = x + 'px'; div.style.top = y + 'px';
+  div.style.width = w + 'px'; div.style.textAlign = align;
+  div.style.color = color;
+  div.innerHTML = `
+    <div class="ti" style="font-size:${size}px;font-weight:700">${text}</div>
+    ${sub ? `<div class="bd" style="font-size:${subSize}px;color:${color};opacity:.85;margin-top:3px">${sub}</div>` : ''}
+  `;
+  L.appendChild(div);
+}
+function plain({ text, x, y, w, color='#3a3530', size=18, weight=400, bg=null, align='left', family='bd', lh=1.45 }) {
+  const div = document.createElement('div');
+  div.className = 'label ' + family;
+  div.style.left = x + 'px'; div.style.top = y + 'px';
+  div.style.width = w + 'px'; div.style.textAlign = align;
+  div.style.color = color; div.style.fontSize = size + 'px';
+  div.style.fontWeight = weight; div.style.lineHeight = lh;
+  if (bg) { div.style.background = bg; div.style.padding = '1px 6px'; }
+  div.innerHTML = text;
+  L.appendChild(div);
+}
+
+// 形状
+function box(x, y, w, h, color, override={}) {
+  rc.rectangle(x, y, w, h, opts(color, override));
+}
+function channel(x, y, w, h, color) {
+  rc.rectangle(x, y, w, h, opts(color, { strokeWidth: 2 }));
+}
+function taskCard(x, y, w, h, color) {
+  const fold = 10;
+  const path = `M${x} ${y} L${x+w-fold} ${y} L${x+w} ${y+fold} L${x+w} ${y+h} L${x} ${y+h} Z`;
+  rc.path(path, opts(color, { strokeWidth: 1.6, roughness: 1.3 }));
+  rc.path(`M${x+w-fold} ${y} L${x+w-fold} ${y+fold} L${x+w} ${y+fold}`,
+    { stroke: color.stroke, strokeWidth: 1.4, roughness: 1.2 });
+}
+function bubble(x, y, w, h, color, tailSide='left') {
+  rc.rectangle(x, y, w, h, opts(color, { strokeWidth: 1.8, roughness: 1.3 }));
+  const tailY = y + h * 0.5;
+  if (tailSide === 'left') {
+    rc.path(`M${x} ${tailY-7} L${x-10} ${tailY} L${x} ${tailY+7}`,
+      { stroke: color.stroke, fill: color.fill, fillStyle: 'solid', strokeWidth: 1.8, roughness: 1.2 });
+  }
+}
+function hexagon(cx, cy, w, h, color) {
+  const dx = w/2, dy = h/2, ear = w * 0.18;
+  rc.polygon([
+    [cx-dx+ear, cy-dy], [cx+dx-ear, cy-dy], [cx+dx, cy],
+    [cx+dx-ear, cy+dy], [cx-dx+ear, cy+dy], [cx-dx, cy]
+  ], opts(color, { strokeWidth: 2 }));
+}
+function dashedGroup(x, y, w, h, color) {
+  const o = { stroke: color.stroke, strokeWidth: 1.6, roughness: 1.2, strokeLineDash: [10, 6] };
+  rc.line(x,    y,    x+w,  y,    o);
+  rc.line(x+w,  y,    x+w,  y+h,  o);
+  rc.line(x+w,  y+h,  x,    y+h,  o);
+  rc.line(x,    y+h,  x,    y,    o);
+}
+function arrow(x1, y1, x2, y2, o = {}) {
+  const op = Object.assign({ stroke: C.flow, strokeWidth: 1.6, roughness: 1.3 }, o);
+  rc.line(x1, y1, x2, y2, op);
+  const a = Math.atan2(y2-y1, x2-x1);
+  const Lh = 11;
+  const headOpts = Object.assign({}, op, { strokeLineDash: undefined });
+  rc.line(x2, y2, x2 - Lh * Math.cos(a - Math.PI/6), y2 - Lh * Math.sin(a - Math.PI/6), headOpts);
+  rc.line(x2, y2, x2 - Lh * Math.cos(a + Math.PI/6), y2 - Lh * Math.sin(a + Math.PI/6), headOpts);
+}
+
+// =================== TITLE ===================
+ctx.fillStyle = C.title;
+ctx.font = `700 48px ${FONT_TI}`;
+ctx.fillText('Concept Palette Cheatsheet · 全部概念锁色样张', 70, 70);
+
+ctx.font = `400 22px ${FONT_BD}`;
+ctx.fillStyle = C.subtitle;
+ctx.fillText('9 色 slot · 概念 alias · shape 二级区分 · 通用色 · 字体 — 同一概念在所有图里永远是同一颜色 + 同一形状基线', 70, 105);
+
+// =================== 9 SLOT GRID ===================
+// 3 cols × 3 rows. Each cell ~770×370.
+const GRID_X0 = 60, GRID_Y0 = 145;
+const CELL_W = 770, CELL_H = 370, GAP = 15;
+
+// Each slot: { key, name_zh, name_en, hex_stroke, hex_fill, contrast, demo_shape, alias[], default_shape_note }
+const SLOTS = [
+  {
+    key: 'user', name: 'C.user', label: '钢蓝 / 雾蓝',
+    contrast: '6.5 : 1',
+    demoShape: 'box',
+    alias: [
+      'User · 用户',
+      '终端用户 · 提问者',
+      '决策者 · Operator',
+      'Human-in-the-loop',
+      '人类审批 · 人类签字',
+      '责任链中的人',
+    ],
+    shapeNote: 'Box (普通输入)  +  Hexagon (人类决策点)',
+  },
+  {
+    key: 'im', name: 'C.im', label: '墨青 / 雾青',
+    contrast: '5.4 : 1',
+    demoShape: 'channel',
+    alias: [
+      'IM Channel',
+      '微信 / Telegram / Feishu / Slack',
+      '通讯通道 · Bus · Queue',
+      'Async Push · 异步通知',
+      'Status Bubble · 状态气泡',
+      '进度通知 · 心跳 · ACK',
+    ],
+    shapeNote: 'Channel (扁长条)  +  Bubble (状态消息)',
+  },
+  {
+    key: 'agent', name: 'C.agent', label: '砖橙 / 米橙 — 唯一主角',
+    contrast: '4.7 : 1',
+    demoShape: 'box-bold',
+    alias: [
+      'Owner · Orchestrator',
+      '主 Agent · Supervisor',
+      '控制面 · 编排核心',
+      'Coordinator',
+      'Planner (负责拆派的那一个)',
+      'Plan / Round',
+    ],
+    shapeNote: 'Box 大号 strokeWidth: 3  +  Group Frame (Plan/Round)',
+  },
+  {
+    key: 'subagent', name: 'C.subagent', label: '焦糖 / 麦黄',
+    contrast: '5.8 : 1',
+    demoShape: 'box',
+    alias: [
+      'Worker · Sub-Agent',
+      'Developer · Writer · Researcher',
+      'Formatter · Tool Agent · Doc Worker',
+      'Verifier · Tester · Reviewer',
+      'Producer · Critic · Synthesizer',
+      '任意被 dispatch 的 task agent',
+    ],
+    shapeNote: 'Box (Worker)  +  Hexagon (Verifier)  +  Card (Task)',
+  },
+  {
+    key: 'llm', name: 'C.llm', label: '靛紫 / 雾紫',
+    contrast: '6.9 : 1',
+    demoShape: 'box',
+    alias: [
+      'LLM · 模型 · Reasoner',
+      'GPT / Claude / Gemini',
+      'Foundation Model · 基座模型',
+      '推理引擎 · 决策模型',
+    ],
+    shapeNote: 'Box',
+  },
+  {
+    key: 'tools', name: 'C.tools', label: '苔绿 / 雾绿',
+    contrast: '5.1 : 1',
+    demoShape: 'box',
+    alias: [
+      'Tools · MCP · MCP Server',
+      'Skill (能力侧)',
+      'Tool Gateway · CLI',
+      'API call (本系统内)',
+      'Sandbox · Workspace · Worktree',
+      '沙箱 · 容器 · Agent Harness',
+    ],
+    shapeNote: 'Box (Tool)  +  Group Frame (Sandbox / 隔离环境)',
+  },
+  {
+    key: 'memory', name: 'C.memory', label: '栗棕 / 牛皮',
+    contrast: '5.4 : 1',
+    demoShape: 'box',
+    alias: [
+      'Memory (统称)',
+      'User Memory · Agent Memory · Team Memory',
+      'Topic Memory · AGENTS.md 类记忆文件',
+      'scratchpad · handoff 文档 · 交付物',
+      'archive · 经验沉淀',
+      'KV / DB / 向量库 · session log · Skill (知识侧)',
+    ],
+    shapeNote: 'Box (三层)  +  虚线 Box (Team Memory)  +  Card (单文件)',
+  },
+  {
+    key: 'external', name: 'C.external', label: '墨灰 / 暖灰',
+    contrast: '6.3 : 1',
+    demoShape: 'box',
+    alias: [
+      'External · 第三方 API · 外部服务',
+      'GitHub · OpenAI Agents SDK',
+      'Google A2A / ADK',
+      'Anthropic Agent Skills · AWS Bedrock AgentCore',
+      '学术论文 / benchmark',
+      '不在本系统内的依赖 / 行业对照',
+    ],
+    shapeNote: 'Box 实线 (真实第三方)  +  Box 虚线 (行业对照)',
+  },
+  {
+    key: 'error', name: 'C.error', label: '砖红 / 浅赭 — 克制使用',
+    contrast: '5.2 : 1',
+    demoShape: 'hexagon',
+    alias: [
+      'Error · Failure · FAIL',
+      'Block · Blocker · Stuck',
+      '异常路径 · 兜底 · 退回',
+      'Retry · Reject · Escalation',
+      '记忆污染 · 上下文污染',
+      '风险动作 (待人类审批拦截)',
+    ],
+    shapeNote: 'Hexagon (异常节点)  +  Bubble (异常通知)',
+  },
+];
+
+// 渲染每个 slot 格子
+SLOTS.forEach((slot, i) => {
+  const col = i % 3;
+  const row = Math.floor(i / 3);
+  const x = GRID_X0 + col * (CELL_W + GAP);
+  const y = GRID_Y0 + row * (CELL_H + GAP);
+  renderSlot(slot, x, y);
+});
+
+function renderSlot(slot, x, y) {
+  const color = C[slot.key];
+
+  // 1) 外框 (淡灰边)
+  rc.rectangle(x, y, CELL_W, CELL_H, {
+    stroke: C.caption, strokeWidth: 1, roughness: 0.6, fill: undefined, strokeLineDash: [4,4]
+  });
+
+  // 2) 顶部色样 demo
+  const demoX = x + 24, demoY = y + 22;
+  if (slot.demoShape === 'box') {
+    box(demoX, demoY, 200, 70, color);
+  } else if (slot.demoShape === 'box-bold') {
+    box(demoX, demoY, 200, 70, color, { strokeWidth: 3 });
+  } else if (slot.demoShape === 'channel') {
+    rc.rectangle(demoX, demoY + 18, 200, 36, opts(color, { strokeWidth: 2 }));
+  } else if (slot.demoShape === 'hexagon') {
+    hexagon(demoX + 100, demoY + 35, 180, 70, color);
+  }
+
+  // 3) Slot 名 + hex (落在色样下方)
+  plain({
+    text: `<b>${slot.name}</b> · ${slot.label}`,
+    x: x + 24, y: demoY + 86, w: CELL_W - 48,
+    color: color.stroke, size: 22, weight: 700, family: 'ti', lh: 1.2,
+  });
+  plain({
+    text: `stroke <code style="font-family:'Times New Roman',Times,serif">${color.stroke}</code> · fill <code style="font-family:'Times New Roman',Times,serif">${color.fill}</code> · WCAG ${slot.contrast}`,
+    x: x + 24, y: demoY + 116, w: CELL_W - 48,
+    color: C.subtitle, size: 14, lh: 1.2,
+  });
+
+  // 4) Alias 列表
+  const aliasY = demoY + 148;
+  slot.alias.forEach((line, idx) => {
+    plain({
+      text: `<span style="color:${color.stroke}">·</span>  ${line}`,
+      x: x + 30, y: aliasY + idx * 22, w: CELL_W - 50,
+      color: C.title, size: 16, lh: 1.32,
+    });
+  });
+
+  // 5) 默认 shape 提示 (底部)
+  plain({
+    text: `<b>Shape:</b> ${slot.shapeNote}`,
+    x: x + 24, y: y + CELL_H - 38, w: CELL_W - 48,
+    color: color.stroke, size: 14, weight: 700, lh: 1.2,
+  });
+}
+
+// =================== BOTTOM AREA: Shape Catalog + Common Colors + Font Demo ===================
+const BOTTOM_Y = GRID_Y0 + 3 * CELL_H + 2 * GAP + 25;  // y ≈ 1295
+
+// --- Shape Catalog (left column) ---
+ctx.font = `700 26px ${FONT_TI}`;
+ctx.fillStyle = C.title;
+ctx.fillText('Shapes · 形状速查', 70, BOTTOM_Y);
+rc.line(70, BOTTOM_Y + 8, 280, BOTTOM_Y + 8, { stroke: C.title, strokeWidth: 1.5, roughness: 1 });
+
+const shapes = [
+  { name: 'Box · 矩形',          desc: '实体 / Service / Agent / 资源',          demo: (sx, sy) => box(sx, sy, 110, 38, C.subagent) },
+  { name: 'Channel · 长条',      desc: '通道 / 传输 / 队列 / IM',               demo: (sx, sy) => rc.rectangle(sx, sy + 10, 110, 18, opts(C.im, { strokeWidth: 2 })) },
+  { name: 'Task Card · 折角',    desc: 'Task / Job / 工作单元 (流转物)',         demo: (sx, sy) => taskCard(sx + 35, sy, 40, 38, C.subagent) },
+  { name: 'Bubble · 气泡',       desc: '状态消息 / IM 推送通知',                 demo: (sx, sy) => bubble(sx + 12, sy, 90, 38, C.im, 'left') },
+  { name: 'Hexagon · 六边形',    desc: '决策 / 异常 / Verifier (验证)',          demo: (sx, sy) => hexagon(sx + 60, sy + 19, 110, 38, C.error) },
+  { name: 'Group Frame · 虚线框', desc: 'Sandbox / Plan / Round / 临时分组',    demo: (sx, sy) => dashedGroup(sx, sy, 110, 38, C.tools) },
+  { name: 'Timeline · 时间线',   desc: '时序 / 阶段 / 长周期',                   demo: (sx, sy) => {
+      rc.line(sx, sy + 19, sx + 110, sy + 19, { stroke: C.flow, strokeWidth: 1.5, roughness: 1, strokeLineDash: [6, 8] });
+      [sx+15, sx+55, sx+95].forEach(mx => rc.line(mx, sy + 13, mx, sy + 25, { stroke: C.flow, strokeWidth: 1.4, roughness: 1 }));
+  } },
+];
+
+shapes.forEach((sh, i) => {
+  const sx = 70;
+  const sy = BOTTOM_Y + 35 + i * 50;
+  sh.demo(sx, sy);
+  plain({ text: sh.name, x: sx + 130, y: sy + 3, w: 220, color: C.title, size: 16, weight: 700, lh: 1.15 });
+  plain({ text: sh.desc, x: sx + 130, y: sy + 23, w: 380, color: C.caption, size: 13, lh: 1.15 });
+});
+
+// --- Common Colors (middle column) ---
+const COMMON_X = 850;
+ctx.font = `700 26px ${FONT_TI}`;
+ctx.fillStyle = C.title;
+ctx.fillText('Common · 通用色', COMMON_X, BOTTOM_Y);
+rc.line(COMMON_X, BOTTOM_Y + 8, COMMON_X + 220, BOTTOM_Y + 8, { stroke: C.title, strokeWidth: 1.5, roughness: 1 });
+
+const commons = [
+  { name: 'C.flow',     hex: '#3a3530', desc: '所有箭头 · Timeline · Workflow 流向 · 调用 · 派发 · 时序', sw: { type: 'arrow' } },
+  { name: 'C.bg',       hex: '#fdfdfa', desc: '画布底色 · 暖米白 · 不用纯白',                          sw: { type: 'swatch', stroke: '#e6e3dd', fill: '#fdfdfa' } },
+  { name: 'C.title',    hex: '#2a2520', desc: '大标题文字色 · 暖墨黑',                                  sw: { type: 'text', size: 20, weight: 700 } },
+  { name: 'C.subtitle', hex: '#5a544f', desc: '副标题 / 二级文字 · 暖中灰',                              sw: { type: 'text', size: 16, weight: 400 } },
+  { name: 'C.caption',  hex: '#7a746e', desc: 'Cost / Token / Budget / 时间戳 / 论文出处 · 暖浅灰',     sw: { type: 'text', size: 14, weight: 400 } },
+];
+
+commons.forEach((cm, i) => {
+  const sx = COMMON_X;
+  const sy = BOTTOM_Y + 35 + i * 55;
+  // 色样
+  if (cm.sw.type === 'arrow') {
+    arrow(sx + 6, sy + 25, sx + 100, sy + 25, { stroke: cm.hex, strokeWidth: 2 });
+  } else if (cm.sw.type === 'swatch') {
+    rc.rectangle(sx, sy, 110, 50, { stroke: cm.sw.stroke, fill: cm.sw.fill, fillStyle: 'solid', strokeWidth: 1.5, roughness: 1 });
+  } else if (cm.sw.type === 'text') {
+    ctx.font = `${cm.sw.weight} ${cm.sw.size}px ${FONT_TI}`;
+    ctx.fillStyle = cm.hex;
+    ctx.fillText('Aa 中宋 字样', sx, sy + 32);
+  }
+  plain({ text: `<b>${cm.name}</b> · <code>${cm.hex}</code>`, x: sx + 130, y: sy + 4, w: 280, color: C.title, size: 17, weight: 700, lh: 1.2 });
+  plain({ text: cm.desc, x: sx + 130, y: sy + 27, w: 460, color: C.caption, size: 13, lh: 1.2 });
+});
+
+// --- Font / Background Demo (right column) ---
+const FONT_X = 1640;
+ctx.font = `700 26px ${FONT_TI}`;
+ctx.fillStyle = C.title;
+ctx.fillText('Type · 字体与底色', FONT_X, BOTTOM_Y);
+rc.line(FONT_X, BOTTOM_Y + 8, FONT_X + 280, BOTTOM_Y + 8, { stroke: C.title, strokeWidth: 1.5, roughness: 1 });
+
+// 字体对比块: 一个底色 swatch, 上面写中英混排
+rc.rectangle(FONT_X, BOTTOM_Y + 30, 700, 70, { stroke: '#e6e3dd', fill: C.bg, fillStyle: 'solid', strokeWidth: 1.5, roughness: 0.6 });
+ctx.font = `700 30px ${FONT_TI}`;
+ctx.fillStyle = C.title;
+ctx.fillText('Orchestrator · 主 Agent · 人类审批', FONT_X + 18, BOTTOM_Y + 73);
+
+ctx.font = `400 18px ${FONT_BD}`;
+ctx.fillStyle = C.subtitle;
+ctx.fillText('Times New Roman + 中宋 / 宋体  ·  serif fallback only', FONT_X + 18, BOTTOM_Y + 96);
+
+plain({
+  text: '<b>规则:</b> 字体栈把英文 Times 放在最前, 中文宋体在后, 兜底 <code>serif</code>。<br>同一标签内中英混排靠浏览器逐字符匹配自动分工, 不要手动 <code>&lt;span&gt;</code> 切。<br>加粗用 <code>font-weight: 700</code> (宋体粗体 ≈ 中宋); 不要用 <code>italic</code>。',
+  x: FONT_X, y: BOTTOM_Y + 115, w: 700,
+  color: C.title, size: 14, lh: 1.5,
+});
+
+// 互斥规则速查
+plain({
+  text: '<b>常踩互斥</b> &nbsp;·&nbsp; ' +
+        '<span style="color:'+C.user.stroke+'">User</span> ≠ <span style="color:'+C.memory.stroke+'">User Memory</span> &nbsp;|&nbsp; ' +
+        '<span style="color:'+C.agent.stroke+'">Orchestrator</span> ≠ <span style="color:'+C.user.stroke+'">人类审批</span> &nbsp;|&nbsp; ' +
+        '<span style="color:'+C.subagent.stroke+'">Verifier</span> 用 Hexagon 不开新色 &nbsp;|&nbsp; ' +
+        '<span style="color:'+C.tools.stroke+'">Sandbox</span> 是 Tools 不是 External &nbsp;|&nbsp; ' +
+        'Memory 三层共用 <span style="color:'+C.memory.stroke+'">memory 棕</span> 靠形状区分 &nbsp;|&nbsp; ' +
+        '颜色按需 · 超过 5 色加图例',
+  x: FONT_X, y: BOTTOM_Y + 215, w: 700,
+  color: C.subtitle, size: 13, lh: 1.6,
+});
+
+// =================== Footer ===================
+ctx.font = `400 14px ${FONT_BD}`;
+ctx.fillStyle = C.caption;
+ctx.fillText('handdrawn-diagram skill · references/domains/agent-team.md · 同一概念在所有图里永远是同一颜色 + 同一形状基线 — 一致性靠字典 + 决策树 + main() 注释自描述, 不靠记忆。', 70, 1755);
+
+window.__renderDone = true;
+</script>
+</body>
+</html>
