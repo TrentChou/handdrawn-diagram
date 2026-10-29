@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Deck</title>
+<!--
+  Animated deck player for hand-drawn diagrams. deck/build.py inlines the diagram data below and writes one
+  offline file. Every slide is one diagram seen through a camera (whole canvas, or a focus region with the rest
+  dimmed). Between slides of the same diagram the camera moves; between different diagrams the elements morph:
+  a concept present on both sides (same motion id, or failing that the same text) moves and reshapes into its
+  new form, details only one side has grow out of / shrink back into their parent, arrows stay attached to the
+  concepts they connect. Keys: → / space / Enter next, ← back, Home / End, F fullscreen; #N in the URL opens slide N.
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #fdfdfa; overflow: hidden; cursor: default; }
+  #stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden; background: #fdfdfa; }
+  .layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: none; }
+  .a { position: absolute; transform-origin: 0 0; box-sizing: border-box; margin: 0; }
+  .a svg { display: block; overflow: visible; }
+  img.a { display: block; }
+  .ti { font-family: 'Times New Roman', Times, 'STZhongsong', '华文中宋', 'Songti SC', 'SimSun', '宋体', 'Noto Serif SC', serif; font-weight: 700; }
+  .bd { font-family: 'Times New Roman', Times, 'Songti SC', 'STSong', 'SimSun', '宋体', 'Noto Serif SC', serif; font-weight: 400; }
+  /* text in flight keeps a paper-coloured halo, so the lines it crosses do not cut through it */
+  .gh { text-shadow: 0 0 2px #fdfdfa, 0 0 6px #fdfdfa, 0 0 12px #fdfdfa; }
+</style>
+<script id="deck-data"></script>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+const SPEC = window.DECK.spec, DATA = window.DECK.data;
+const [W, H] = SPEC.stage || [1920, 1080];
+const DIM = SPEC.dim ?? 0.13, PAD = 28, MAX_ZOOM = SPEC.maxZoom || 1.75;
+const DUR = Object.assign({ camera: 1050, morph: 1350 }, SPEC.durations || {});
+const TIMING = SPEC.timing || {};                 // { "<id>": [start, end] }: that concept moves inside this window
+
+// ---------- Geometry ----------
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1);
+const ease = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const ctr = r => [r[0] + r[2] / 2, r[1] + r[3] / 2];
+const lerp = (a, b, e) => a + (b - a) * e;
+const lerpR = (a, b, e) => [lerp(a[0], b[0], e), lerp(a[1], b[1], e), lerp(a[2], b[2], e), lerp(a[3], b[3], e)];
+const toStage = (c, r) => [c.x + r[0] * c.s, c.y + r[1] * c.s, r[2] * c.s, r[3] * c.s];
+const toLayer = (c, r) => [(r[0] - c.x) / c.s, (r[1] - c.y) / c.s, r[2] / c.s, r[3] / c.s];
+const union = rs => { const x0 = Math.min(...rs.map(r => r[0])), y0 = Math.min(...rs.map(r => r[1]));
+  return [x0, y0, Math.max(...rs.map(r => r[0] + r[2])) - x0, Math.max(...rs.map(r => r[1] + r[3])) - y0]; };
+const within = (pt, q) => pt[0] >= q[0] && pt[0] <= q[0] + q[2] && pt[1] >= q[1] && pt[1] <= q[1] + q[3];
+
+// ---------- Slides ----------
+// focus: [x, y, w, h] in canvas px, or concept ids (["plant", "pipe-network"]) → the box around them.
+function idRects(key, ids) {
+  const D = DATA[key], rs = [];
+  for (const id of ids) {
+    D.nodes.forEach(n => n.id === id && rs.push(n.r));
+    D.shapes.forEach(s => s.id === id && s.grp === 'frame' && rs.push(s.r));
+    D.texts.forEach(t => t.id === id && t.node === undefined && rs.push(t.t));
+  }
+  return rs;
+}
+const SLIDES = SPEC.slides.map((s, i) => {
+  let f = s.focus;
+  if (typeof f === 'string') f = [f];
+  if (Array.isArray(f) && typeof f[0] === 'string') {
+    const rs = idRects(s.diagram, f);
+    if (!rs.length) console.warn(`slide ${i + 1}: focus ids ${f} not found in ${s.diagram}`);
+    f = rs.length ? union(rs) : null;
+  }
+  return { d: s.diagram, focus: f || null, note: s.note || '', hold: s.hold };
+});
+SLIDES.forEach(sl => {
+  const D = DATA[sl.d], fit = Math.min(W / D.w, H / D.h);
+  if (!sl.focus) { sl.cam = { s: fit, x: (W - D.w * fit) / 2, y: (H - D.h * fit) / 2 }; return; }
+  const [x, y, w, h] = [sl.focus[0] - PAD, sl.focus[1] - PAD, sl.focus[2] + 2 * PAD, sl.focus[3] + 2 * PAD];
+  const ax = 70, ay = 50, aw = W - 2 * ax, ah = H - 2 * ay;
+  const s = Math.min(aw / w, ah / h, fit * MAX_ZOOM);
+  sl.cam = { s, x: ax + (aw - w * s) / 2 - x * s, y: ay + (ah - h * s) / 2 - y * s };
+});
+
+// ---------- Layers: one per diagram, every shape and text line is its own element ----------
+const stage = document.getElementById('stage');
+stage.style.width = W + 'px'; stage.style.height = H + 'px';
+const LAYERS = {};
+function layer(key) {
+  if (LAYERS[key]) return LAYERS[key];
+  const D = DATA[key], el = document.createElement('div');
+  el.className = 'layer'; el.style.width = D.w + 'px'; el.style.height = D.h + 'px';
+  const atoms = [];
+  D.shapes.forEach(s => {
+    const [x, y, w, h] = s.r, e = document.createElement('div');
+    e.className = 'a';
+    e.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px`;
+    const svg = inner => `<svg width="${w}" height="${h}" viewBox="${x} ${y} ${w} ${h}">${inner}</svg>`;
+    // an arrow is its line plus its head: in flight the line stretches, the head only turns and moves
+    const gs = s.grp === 'arrow' ? s.svg.match(/<g\b[\s\S]*?<\/g>/g) || [] : [];
+    e.innerHTML = gs.length > 1 ? svg(gs[0]) + svg(gs.slice(1).join('')) : svg(s.svg);
+    const [body, head] = gs.length > 1 ? e.children : [];
+    if (head) for (const g of [body, head]) g.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0';
+    el.appendChild(e);
+    atoms.push(s.atom = { el: e, R: s.r, T: s.r, base: 1, uni: false, src: s, kind: 'shape', body, head });
+  });
+  (D.images || []).forEach(m => {
+    const [x, y, w, h] = m.r, e = document.createElement('img');
+    e.className = 'a'; e.src = m.src; e.alt = '';
+    e.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px`;
+    el.appendChild(e);
+    atoms.push(m.atom = { el: e, R: m.r, T: m.r, base: m.op, uni: false, src: m, kind: 'image' });
+  });
+  D.texts.forEach(t => {
+    const [x, y, w, h] = t.r, e = document.createElement('div');
+    e.className = 'a';
+    e.style.cssText = `${t.css};position:absolute;left:${x - .5}px;top:${y}px;width:${w + 1}px;height:${h}px`;
+    e.innerHTML = t.html;
+    el.appendChild(e);
+    atoms.push(t.atom = { el: e, R: [x - .5, y, w + 1, h], T: t.t, base: t.op, uni: true, src: t, kind: 'text' });
+  });
+  stage.appendChild(el);
+  return LAYERS[key] = { el, atoms, D };
+}
+
+// Concepts of a diagram: nodes (box + its text), frames (+ label), arrows, and free text lines with an id.
+function model(key) {
+  const L = layer(key), D = L.D;
+  if (L.model) return L.model;
+  const items = [], byId = new Map(), arrows = [];
+  const add = it => { items.push(it); if (it.id) (byId.get(it.id) || byId.set(it.id, []).get(it.id)).push(it); };
+  D.nodes.forEach(n => {
+    const outer = D.shapes[n.shapes.at(-1)].atom;
+    add({ kind: 'node', id: n.id, parent: n.parent, outer, r: n.r,
+          copies: n.shapes.slice(0, -1).map(k => D.shapes[k].atom),
+          texts: n.texts.map(j => D.texts[j]).filter(t => !t.id || t.id === n.id).map(t => t.atom) });
+  });
+  D.shapes.forEach(s => {
+    if (s.grp === 'frame') add({ kind: 'frame', id: s.id, parent: s.parent, outer: s.atom, r: s.r,
+                                 copies: [], texts: s.label !== undefined ? [D.texts[s.label].atom] : [] });
+    if (s.grp === 'arrow') arrows.push({ id: s.id, from: s.from, to: s.to, atom: s.atom, ends: s.ends });
+  });
+  D.texts.forEach(t => {
+    const inNode = t.node !== undefined && (!t.id || t.id === D.nodes[t.node].id);
+    const isLabel = D.shapes.some(s => s.label !== undefined && D.texts[s.label] === t);
+    if (t.id && !inNode && !isLabel) add({ kind: 'text', id: t.id, parent: t.parent, outer: t.atom, r: t.t, copies: [], texts: [t.atom] });
+  });
+  return L.model = { items, byId, arrows };
+}
+
+// Opacity of an atom on a slide: everything outside the focus region is dimmed.
+function stateOp(sl, a) {
+  if (!sl.focus) return a.base;
+  const [fx, fy, fw, fh] = [sl.focus[0] - PAD, sl.focus[1] - PAD, sl.focus[2] + 2 * PAD, sl.focus[3] + 2 * PAD];
+  const r = a.T, [cx, cy] = ctr(r);
+  const ix = Math.max(0, Math.min(r[0] + r[2], fx + fw) - Math.max(r[0], fx));
+  const iy = Math.max(0, Math.min(r[1] + r[3], fy + fh) - Math.max(r[1], fy));
+  const inC = cx >= fx && cx <= fx + fw && cy >= fy && cy <= fy + fh;
+  const cover = (ix * iy) / Math.max(1, r[2] * r[3]);
+  return a.base * (inC && cover > .35 || cover > .6 ? 1 : DIM);
+}
+
+// Place an atom so that its anchor rect T lands on `cur` (layer coords). Text keeps its aspect;
+// al = 'l' / 'r' pins its left / right edge instead of its centre (lines sharing only a prefix / suffix).
+function place(a, cur, al) {
+  if (!cur) { a.el.style.transform = ''; return; }
+  const [ox, oy] = a.R, T = a.T;
+  let sx, sy, dx, dy;
+  if (a.uni) {
+    sx = sy = cur[3] / T[3];
+    const [cx, cy] = ctr(T), [nx, ny] = ctr(cur);
+    dx = al === 'l' ? cur[0] - ox - sx * (T[0] - ox) : al === 'r' ? cur[0] + cur[2] - ox - sx * (T[0] + T[2] - ox) : nx - ox - sx * (cx - ox);
+    dy = ny - oy - sy * (cy - oy);
+  } else {
+    sx = cur[2] / T[2]; sy = cur[3] / T[3];
+    dx = cur[0] - ox - sx * (T[0] - ox); dy = cur[1] - oy - sy * (T[1] - oy);
+  }
+  a.el.style.transform = `translate(${dx}px,${dy}px) scale(${sx},${sy})`;
+}
+// Place an arrow drawn from e1 to e2 so that it runs from p1 to p2. Its line stretches along its length only and
+// its head turns and moves without stretching; c scales both across the line (stroke width, head size).
+function placeSeg(a, e1, e2, p1, p2, c = 1) {
+  const len = Math.hypot(e2[0] - e1[0], e2[1] - e1[1]);
+  if (len < 1) return;
+  const s = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / len;
+  const B = Math.atan2(e2[1] - e1[1], e2[0] - e1[0]), A = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]);
+  const [ox, oy] = a.R;
+  const css = ([m11, m21, m12, m22], P, E) => {            // x -> P + M (x - E), in the element's own frame
+    const ux = ox - E[0], uy = oy - E[1];
+    return `matrix(${m11},${m21},${m12},${m22},${m11 * ux + m12 * uy + P[0] - ox},${m21 * ux + m22 * uy + P[1] - oy})`;
+  };
+  const [cA, sA, cB, sB] = [Math.cos(A), Math.sin(A), Math.cos(B), Math.sin(B)];
+  const line = [cA * s * cB + sA * c * sB, sA * s * cB - cA * c * sB, cA * s * sB - sA * c * cB, sA * s * sB + cA * c * cB];
+  if (!a.head) { a.el.style.transform = css(line, p1, e1); return; }
+  const th = A - B;
+  a.body.style.transform = css(line, p1, e1);
+  a.head.style.transform = css([c * Math.cos(th), c * Math.sin(th), -c * Math.sin(th), c * Math.cos(th)], p2, e2);
+}
+const setCam = (L, c) => { L.el.style.transform = `translate(${c.x}px,${c.y}px) scale(${c.s})`; };
+
+function setState(i) {
+  const sl = SLIDES[i], L = layer(sl.d);
+  for (const k in LAYERS) if (LAYERS[k] !== L) LAYERS[k].el.style.display = 'none';
+  L.el.style.display = 'block'; L.el.style.willChange = ''; L.el.style.zIndex = 1;
+  setCam(L, sl.cam);
+  for (const a of L.atoms) {
+    a.el.style.transform = ''; a.el.style.opacity = stateOp(sl, a); a.el.style.willChange = ''; a.el.style.zIndex = ''; a.el.classList.remove('gh');
+    if (a.head) a.body.style.transform = a.head.style.transform = '';
+  }
+}
+
+// ---------- Same diagram: camera move + focus change ----------
+function cameraTrans(A, B) {
+  const L = layer(A.d), ca = A.cam, cb = B.cam;
+  const va = [-ca.x / ca.s, -ca.y / ca.s, W / ca.s, H / ca.s], vb = [-cb.x / cb.s, -cb.y / cb.s, W / cb.s, H / cb.s];
+  const ops = L.atoms.map(a => [a, stateOp(A, a), stateOp(B, a)]).filter(([, x, y]) => x !== y);
+  L.el.style.willChange = 'transform';
+  return {
+    dur: DUR.camera,
+    apply(p) {
+      const e = ease(p), v = lerpR(va, vb, e), s = W / v[2];
+      setCam(L, { s, x: -v[0] * s, y: -v[1] * s });
+      const f = ease(seg(p, .1, .9));
+      for (const [a, x, y] of ops) a.el.style.opacity = lerp(x, y, f);
+    },
+  };
+}
+
+// ---------- Different diagrams: which element becomes which ----------
+// Text without an id still pairs when the line reads the same; a leading step number does not count.
+const bare = s => s.replace(/^(?:\d+\s*(?:·|\.|、|\)|）)|[①-⑳])\s*/, '').trim();
+function greedy(cands) {
+  cands.sort((p, q) => p[0] - q[0]);
+  const ua = new Set(), ub = new Set(), out = [];
+  for (const [, i, j] of cands) { if (ua.has(i) || ub.has(j)) continue; ua.add(i); ub.add(j); out.push([i, j]); }
+  return out;
+}
+// Returns pairs [atomA, atomB, kind, window], followers [atom, lead | 'region', side, window] that ride a moving
+// atom while fading, clones [source, atom, side] (an extra copy splits off / merges into source), and arrows.
+function match(A, B) {
+  const MA = model(A.d), MB = model(B.d);
+  const dist = (ra, rb) => { const p = ctr(toStage(A.cam, ra)), q = ctr(toStage(B.cam, rb)); return Math.hypot(p[0] - q[0], p[1] - q[1]); };
+  const pairs = [], follow = [], clones = [], usedA = new Set(), usedB = new Set(), pA = new Set(), pB = new Set();
+  const tw = (a, b) => TIMING[a.src.id] || TIMING[b.src.id] || TIMING[a.src.parent] || undefined;
+  const kindOf = (a, b) => !a.uni ? 'shape' : a.src.txt === b.src.txt ? 'text' : bare(a.src.txt) === bare(b.src.txt) ? 'right' : 'left';
+  const pair = (a, b, kind) => { if (usedA.has(a) || usedB.has(b)) return; pairs.push([a, b, kind || kindOf(a, b), tw(a, b)]); usedA.add(a); usedB.add(b); pA.add(a); pB.add(b); };
+  const fol = (atom, lead, side, win) => { const U = side === 'a' ? usedA : usedB; if (U.has(atom)) return; follow.push([atom, lead, side, win]); U.add(atom); };
+  const clone = (src, atom, side) => { const U = side === 'a' ? usedA : usedB; if (U.has(atom)) return; clones.push([src, atom, side]); U.add(atom); (side === 'a' ? pA : pB).add(atom); };
+  const OUT = [0, .3], IN = [.58, 1];
+  const winOf = side => side === 'a' ? OUT : IN;
+  const done = new Set();                                // items already matched as a whole
+
+  // text lines of two matched concepts: identical lines fly, the two headings cross-fade in place, the rest fade
+  function pairLines(ta0, tb0, leadA, leadB) {
+    const ta = ta0.filter(a => !usedA.has(a)), tb = tb0.filter(b => !usedB.has(b));
+    greedy(ta.flatMap((a, i) => tb.map((b, j) => bare(a.src.txt) === bare(b.src.txt) ? [dist(a.T, b.T), i, j] : null).filter(Boolean)))
+      .forEach(([i, j]) => pair(ta[i], tb[j]));
+    const [ha] = ta0, [hb] = tb0;                        // the headings of the two forms
+    if (ha && hb && !usedA.has(ha) && !usedB.has(hb)) pair(ha, hb, 'left');
+    ta.forEach(a => fol(a, leadA, 'a', OUT));
+    tb.forEach(b => fol(b, leadB, 'b', IN));
+  }
+  function pairItems(x, y) {
+    done.add(x); done.add(y);
+    if (x.kind === 'text' && y.kind !== 'text') {        // a line here is a whole box there: the box grows around it
+      const head = y.texts[0];
+      if (head) { pair(x.outer, head); [y.outer, ...y.copies, ...y.texts.slice(1)].forEach(b => fol(b, head, 'b', [.3, .85])); }
+      else pair(x.outer, y.outer, 'shape');
+      return;
+    }
+    if (y.kind === 'text' && x.kind !== 'text') {
+      const head = x.texts[0];
+      if (head) { pair(head, y.outer); [x.outer, ...x.copies, ...x.texts.slice(1)].forEach(a => fol(a, head, 'a', [.1, .6])); }
+      else pair(x.outer, y.outer, 'shape');
+      return;
+    }
+    if (x.kind === 'text') { pair(x.outer, y.outer); return; }
+    pair(x.outer, y.outer, 'shape');
+    const n = Math.min(x.copies.length, y.copies.length);
+    for (let k = 0; k < n; k++) pair(x.copies.at(-1 - k), y.copies.at(-1 - k), 'shape');
+    x.copies.slice(0, x.copies.length - n).forEach(a => fol(a, x.outer, 'a', OUT));
+    y.copies.slice(0, y.copies.length - n).forEach(b => fol(b, y.outer, 'b', IN));
+    pairLines(x.texts, y.texts, x.outer, y.outer);
+  }
+
+  // 1. same id on both sides; extra copies on one side split off (or merge into) their partner
+  for (const [id, la0] of MA.byId) {
+    const lb0 = MB.byId.get(id);
+    if (!lb0) continue;
+    const la = la0.filter(x => !done.has(x)), lb = lb0.filter(y => !done.has(y));
+    const m = greedy(la.flatMap((x, i) => lb.map((y, j) => [dist(x.r, y.r), i, j])));
+    m.forEach(([i, j]) => pairItems(la[i], lb[j]));
+    const mp = m.map(([i, j]) => [la[i], lb[j]]);
+    const gap = (r, q) => Math.hypot(ctr(r)[0] - ctr(q)[0], ctr(r)[1] - ctr(q)[1]);
+    const nearest = (it, k) => mp.reduce((best, pr) => !best || gap(pr[k].r, it.r) < gap(best[k].r, it.r) ? pr : best, null);
+    lb.filter(y => !done.has(y)).forEach(y => { const [x] = nearest(y, 1); done.add(y); clone(x.outer, y.outer, 'b');
+      [...y.copies, ...y.texts].forEach(b => fol(b, y.outer, 'b', [.4, .9])); });
+    la.filter(x => !done.has(x)).forEach(x => { const [, y] = nearest(x, 0); done.add(x); clone(y.outer, x.outer, 'a');
+      [...x.copies, ...x.texts].forEach(a => fol(a, x.outer, 'a', [.2, .6])); });
+  }
+
+  // 2. a concept with no partner but a declared parent: it lives inside the parent here,
+  //    or it splits off the parent drawn on the other side (and merges back on the way there)
+  const adopt = (M, O, side) => M.items.forEach(it => {
+    if (done.has(it) || !it.parent) return;
+    const own = (M.byId.get(it.parent) || []).find(p => (side === 'a' ? pA : pB).has(p.outer));
+    const other = (O.byId.get(it.parent) || [])[0];
+    if (own) { done.add(it); [it.outer, ...it.copies, ...it.texts].forEach(a => fol(a, own.outer, side, side === 'a' ? [.05, .5] : [.35, .9])); }
+    else if (other) { done.add(it); clone(other.outer, it.outer, side); [...it.copies, ...it.texts].forEach(a => fol(a, it.outer, side, side === 'a' ? [.2, .6] : [.4, .9])); }
+  });
+  adopt(MA, MB, 'a'); adopt(MB, MA, 'b');
+
+  // 3. no ids: the same text line on both sides (legend only pairs with legend; titles with titles)
+  const LA = layer(A.d), LB = layer(B.d);
+  const freeT = (Lr, U) => Lr.atoms.filter(a => a.kind === 'text' && !U.has(a));
+  const ta = freeT(LA, usedA), tb = freeT(LB, usedB);
+  const grpOf = a => a.src.grp === 'legend' ? 'legend' : a.src.grp === 'title' || a.src.grp === 'subtitle' ? 'title' : '';
+  greedy(ta.flatMap((a, i) => tb.map((b, j) => bare(a.src.txt) === bare(b.src.txt) && grpOf(a) === grpOf(b) ? [dist(a.T, b.T), i, j] : null).filter(Boolean)))
+    .forEach(([i, j]) => pair(ta[i], tb[j]));
+  // ... and the same picture
+  const ia = LA.atoms.filter(a => a.kind === 'image' && !usedA.has(a)), ib = LB.atoms.filter(b => b.kind === 'image' && !usedB.has(b));
+  greedy(ia.flatMap((a, i) => ib.map((b, j) => a.src.src === b.src.src ? [dist(a.T, b.T), i, j] : null).filter(Boolean)))
+    .forEach(([i, j]) => pair(ia[i], ib[j], 'shape'));
+
+  // 4. a concept that only shares a text line: its box and other lines grow / shrink around that line
+  const ride = (M, P, side, win) => M.items.forEach(it => {
+    if (done.has(it)) return;
+    const lead = it.texts.find(a => P.has(a));
+    if (lead) { done.add(it); [it.outer, ...it.copies, ...it.texts].forEach(a => a !== lead && fol(a, lead, side, win)); }
+  });
+  ride(MA, pA, 'a', [.15, .6]); ride(MB, pB, 'b', [.35, .85]);
+
+  // 5. arrows: same id, else the same two concepts (an end may sit on a part of the concept the other side
+  //    shows whole: source → plant ≈ source → first step inside the plant); every arrow keeps its ends on its concepts
+  const parentOf = new Map();
+  for (const M of [MA, MB]) M.items.forEach(it => it.id && it.parent && !parentOf.has(it.id) && parentOf.set(it.id, it.parent));
+  const chain = id => { const out = []; for (let k = id, n = 0; k && n < 20; k = parentOf.get(k), n++) out.push(k); return out; };
+  const endCost = (a, b) => !a || !b ? -1 : a === b ? 0 : chain(b).includes(a) || chain(a).includes(b) ? 1 : -1;
+  const arrows = [];
+  const fa = MA.arrows.filter(r => !usedA.has(r.atom)), fb = MB.arrows.filter(r => !usedB.has(r.atom));
+  const mate = new Map();
+  greedy(fa.flatMap((x, i) => fb.map((y, j) => {
+    if (x.id && y.id) return x.id === y.id ? [dist(x.atom.T, y.atom.T), i, j] : null;
+    const c1 = endCost(x.from, y.from), c2 = endCost(x.to, y.to);
+    return c1 < 0 || c2 < 0 ? null : [(c1 + c2) * 1e5 + dist(x.atom.T, y.atom.T), i, j];
+  }).filter(Boolean))).forEach(([i, j]) => mate.set(fa[i], fb[j]));
+  fa.forEach(r => { usedA.add(r.atom); arrows.push({ r, side: 'a', mate: mate.get(r) || null }); });
+  const mated = new Set(mate.values());
+  fb.forEach(r => { usedB.add(r.atom); arrows.push({ r, side: 'b', mate: mated.has(r) ? r : null }); });
+
+  // 6. details only one side shows: they grow out of (or shrink into) the smallest moving shape around them;
+  //    with no such shape, they ride the region both slides describe (zoom in / out)
+  const settle = (Lr, P, U, side, win, winR) => {
+    const boxes = Lr.atoms.filter(a => a.kind === 'shape' && P.has(a));
+    for (const a of Lr.atoms) {
+      if (U.has(a)) continue;
+      const c = ctr(a.T), area = a.T[2] * a.T[3];
+      let best = null;
+      for (const b of boxes) {
+        const q = b.T;
+        if (b !== a && q[2] * q[3] > area * 1.2 && within(c, q) && (!best || q[2] * q[3] < best.T[2] * best.T[3])) best = b;
+      }
+      fol(a, best || 'region', side, best ? win : winR);
+    }
+  };
+  settle(LA, pA, usedA, 'a', [.05, .5], [0, .45]);
+  settle(LB, pB, usedB, 'b', [.35, .9], [.4, 1]);
+  return { pairs, follow, clones, arrows, MA, MB };
+}
+
+// The part of each canvas both slides talk about: the box around the concepts they share (moved, split or
+// merged). With too little in common to tell, the focus region or the whole canvas.
+function regionOf(sl, atoms) {
+  const D = DATA[sl.d], full = sl.focus || [0, 0, D.w, D.h];
+  if (atoms.length < 2) return full;
+  const u = union(atoms.map(a => a.T));
+  return u[2] * u[3] < .03 * D.w * D.h ? full : u;
+}
+
+const hasBg = a => a.uni && /background:/.test(a.src.css) && !/background:\s*(rgba\(0, 0, 0, 0\)|transparent)/.test(a.src.css);
+function magicTrans(A, B) {
+  const LA = layer(A.d), LB = layer(B.d);
+  setCam(LA, A.cam); setCam(LB, B.cam);
+  LA.el.style.display = LB.el.style.display = 'block';
+  LA.el.style.zIndex = 1; LB.el.style.zIndex = 2;
+  const { pairs, follow, clones, arrows, MA, MB } = match(A, B);
+  const moved = new Set(), tracks = [], leads = new Map();
+  const track = (a, b, kind, tw) => {
+    const al = kind === 'left' ? 'l' : kind === 'right' ? 'r' : null;
+    const ta = { atom: a, from: a.T, to: toLayer(A.cam, toStage(B.cam, b.T)), al, tw };
+    const tb = { atom: b, from: toLayer(B.cam, toStage(A.cam, a.T)), to: b.T, al, tw };
+    // identical text: the incoming copy takes over early and the pair keeps a constant combined opacity;
+    // shapes and differing lines: a plain cross-fade while they overlap mid-flight
+    // a label on a paper patch (frame titles) only takes over at the end, so no patch flies over the boxes
+    const bgA = hasBg(a), bgB = hasBg(b);
+    const win = kind === 'text' ? (bgB && !bgA ? [.6, .95] : [.05, .45]) : al ? (bgB && !bgA ? [.55, .9] : bgA && !bgB ? [.1, .45] : [.3, .7]) : [.2, .65];
+    tracks.push({ ta, tb, kind, oA: stateOp(A, a), oB: stateOp(B, b), win });
+    leads.set(a, ta); leads.set(b, tb); moved.add(a); moved.add(b);
+  };
+  for (const [a, b, kind, tw] of pairs) track(a, b, kind, tw);
+  // copies that split off one box come out of their own part of it, already laid out as they will land
+  const part = new Map();
+  for (const [src, atom, side] of clones) {
+    const sib = clones.filter(c => c[0] === src && c[2] === side).map(c => c[1]);
+    const U = union(sib.map(a => a.T)), S = src.T, r = atom.T;
+    part.set(atom, sib.length < 2 ? S : [S[0] + (r[0] - U[0]) / U[2] * S[2], S[1] + (r[1] - U[1]) / U[3] * S[3], r[2] / U[2] * S[2], r[3] / U[3] * S[3]]);
+  }
+  const solo = clones.map(([src, atom, side]) => {
+    const t = side === 'b'
+      ? { atom, from: toLayer(B.cam, toStage(A.cam, part.get(atom))), to: atom.T, o0: 0, o1: stateOp(B, atom), win: [.15, .6] }
+      : { atom, from: atom.T, to: toLayer(A.cam, toStage(B.cam, part.get(atom))), o0: stateOp(A, atom), o1: 0, win: [.35, .8] };
+    leads.set(atom, t); moved.add(atom);
+    return t;
+  });
+  const shared = side => [...pairs.map(p => p[side === 'a' ? 0 : 1]), ...clones.filter(c => c[2] === side).map(c => c[1]),
+                           ...clones.filter(c => c[2] !== side).map(c => c[0])].filter(a => !a.uni);
+  const RA = regionOf(A, shared('a')), RB = regionOf(B, shared('b'));
+  const region = {
+    a: { from: RA, to: toLayer(A.cam, toStage(B.cam, RB)), atom: { T: RA } },
+    b: { from: toLayer(B.cam, toStage(A.cam, RA)), to: RB, atom: { T: RB } },
+  };
+  const at = (t, p) => t.rect ? t.rect(p) : lerpR(t.from, t.to, t.tw ? ease(seg(p, t.tw[0], t.tw[1])) : ease(p));
+  const followers = follow.map(([f, lead, side, win]) => {
+    moved.add(f);
+    const L = lead === 'region' ? region[side] : leads.get(lead), T = L.atom.T;
+    const fl = { atom: f, side, win, o: side === 'a' ? stateOp(A, f) : stateOp(B, f) };
+    fl.rect = p => {                                     // keep its place inside the lead, scale uniformly
+      const c = at(L, p), sx = c[2] / T[2], sy = c[3] / T[3], s = Math.sqrt(sx * sy);
+      const [fx, fy] = ctr(f.T), nx = c[0] + (fx - T[0]) * sx, ny = c[1] + (fy - T[1]) * sy;
+      const w = f.T[2] * s, h = f.T[3] * s;
+      return [nx - w / 2, ny - h / 2, w, h];
+    };
+    leads.set(f, fl);
+    return fl;
+  });
+  // arrow ends ride the concept they touch (wherever its box is going), else the region
+  const anchorOf = (M, id, side) => {
+    const it = id && (M.byId.get(id) || []).find(x => leads.has(x.outer));
+    return it ? leads.get(it.outer) : region[side];
+  };
+  const wires = arrows.map(({ r, side, mate }) => {
+    const M = side === 'a' ? MA : MB, sl = side === 'a' ? A : B;
+    moved.add(r.atom);
+    const e1 = [r.ends[0], r.ends[1]], e2 = [r.ends[2], r.ends[3]];
+    const k1 = anchorOf(M, r.from, side), k2 = anchorOf(M, r.to, side);
+    const rel = (k, e) => [(e[0] - k.atom.T[0]) / k.atom.T[2], (e[1] - k.atom.T[1]) / k.atom.T[3]];
+    const o = stateOp(sl, r.atom);
+    return { atom: r.atom, r, mate, e1, e2, k1, k2, u1: rel(k1, e1), u2: rel(k2, e2), side, cam: sl.cam, o,
+             o0: side === 'a' ? o : 0, o1: side === 'a' ? 0 : o, win: side === 'a' ? [0, .35] : [.55, 1] };
+  });
+  // a matched pair runs along one shared line (from where the old one starts to where the new one ends),
+  // the new arrow drawn over the old one: two arrows never show side by side
+  const wireOf = new Map(wires.filter(w => w.side === 'b').map(w => [w.r, w]));
+  for (const w of wires) if (w.side === 'a' && w.mate) { w.partner = wireOf.get(w.mate); w.partner.partner = w; }
+  const ptS = (c, q) => [c.x + q[0] * c.s, c.y + q[1] * c.s], ptL = (c, q) => [(q[0] - c.x) / c.s, (q[1] - c.y) / c.s];
+  const ends = (w, p) => { const c1 = at(w.k1, p), c2 = at(w.k2, p);
+    return [ptS(w.cam, [c1[0] + w.u1[0] * c1[2], c1[1] + w.u1[1] * c1[3]]), ptS(w.cam, [c2[0] + w.u2[0] * c2[2], c2[1] + w.u2[1] * c2[3]])]; };
+  const still = [
+    ...LA.atoms.filter(a => !moved.has(a)).map(a => ({ atom: a, o0: stateOp(A, a), o1: 0, win: [0, .4] })),
+    ...LB.atoms.filter(a => !moved.has(a)).map(a => ({ atom: a, o0: 0, o1: stateOp(B, a), win: [.52, 1] })),
+  ];
+  // while things fly past each other, smaller shapes stay on top of bigger ones and text on top of shapes
+  for (const L of [LA, LB]) {
+    L.atoms.filter(a => !a.uni).sort((p, q) => q.T[2] * q.T[3] - p.T[2] * p.T[3]).forEach((a, i) => { a.el.style.zIndex = i + 1; });
+    L.atoms.filter(a => a.uni).forEach(a => { a.el.style.zIndex = 9999; });
+  }
+  for (const a of moved) a.el.style.willChange = 'transform, opacity';
+  for (const k of tracks) if (k.ta.atom.uni) { k.ta.atom.el.classList.add('gh'); k.tb.atom.el.classList.add('gh'); }
+  for (const a of LB.atoms) a.el.style.opacity = 0;
+  return {
+    dur: DUR.morph, tracks, wires,
+    apply(p) {
+      const lvl = ease(seg(p, .1, .9));
+      for (const k of tracks) {
+        place(k.ta.atom, at(k.ta, p), k.ta.al);
+        place(k.tb.atom, at(k.tb, p), k.tb.al);
+        const L = lerp(k.oA, k.oB, lvl), x = ease(seg(p, k.win[0], k.win[1]));
+        let oa = L * (1 - x), ob = L * x;
+        if (k.kind === 'text') oa = ob >= .999 ? 0 : (L - ob) / (1 - ob);   // over-the-top: top + bottom·(1−top) = L
+        k.ta.atom.el.style.opacity = oa; k.tb.atom.el.style.opacity = ob;
+      }
+      for (const t of solo) {
+        place(t.atom, at(t, p));
+        t.atom.el.style.opacity = lerp(t.o0, t.o1, ease(seg(p, t.win[0], t.win[1])));
+      }
+      for (const f of followers) {
+        place(f.atom, f.rect(p));
+        const q = ease(seg(p, f.win[0], f.win[1]));
+        f.atom.el.style.opacity = f.o * (f.side === 'a' ? 1 - q : q);
+      }
+      const e = ease(p), scr = Math.pow(A.cam.s, 1 - e) * Math.pow(B.cam.s, e);   // on-screen scale of a stroke
+      const at1 = new Map(wires.map(w => [w, ends(w, p)]));
+      for (const w of wires) {
+        let [q1, q2] = at1.get(w);
+        if (w.partner) {
+          const [a1, a2] = at1.get(w.side === 'a' ? w : w.partner), [b1, b2] = at1.get(w.side === 'a' ? w.partner : w);
+          q1 = [lerp(a1[0], b1[0], e), lerp(a1[1], b1[1], e)]; q2 = [lerp(a2[0], b2[0], e), lerp(a2[1], b2[1], e)];
+        }
+        placeSeg(w.atom, w.e1, w.e2, ptL(w.cam, q1), ptL(w.cam, q2), scr / w.cam.s);
+        if (!w.partner) { w.atom.el.style.opacity = lerp(w.o0, w.o1, ease(seg(p, w.win[0], w.win[1]))); continue; }
+        if (w.side === 'b') continue;
+        const L = lerp(w.o, w.partner.o, lvl), ob = L * ease(seg(p, .3, .7));
+        w.partner.atom.el.style.opacity = ob;
+        w.atom.el.style.opacity = ob >= .999 ? 0 : (L - ob) / (1 - ob);            // together they keep level L
+      }
+      for (const s of still) s.atom.el.style.opacity = lerp(s.o0, s.o1, ease(seg(p, s.win[0], s.win[1])));
+    },
+    done() { for (const L of [LA, LB]) for (const a of L.atoms) a.el.classList.remove('gh'); },
+  };
+}
+
+// ---------- Driver ----------
+let cur = 0, tr = null;
+function makeTrans(i, j) {
+  const A = SLIDES[i], B = SLIDES[j];
+  return Object.assign(A.d === B.d ? cameraTrans(A, B) : magicTrans(A, B), { i, j });
+}
+function finish() { if (!tr) return; tr.apply(1); if (tr.done) tr.done(); setState(tr.j); tr = null; }
+function go(j) {
+  j = clamp(j, 0, SLIDES.length - 1);
+  if (tr) finish();
+  if (j === cur) return;
+  const i = cur; cur = j;
+  history.replaceState(null, '', '#' + (j + 1));
+  const t = tr = makeTrans(i, j);
+  const t0 = performance.now();
+  const tick = now => {
+    if (tr !== t) return;
+    const p = Math.min(1, (now - t0) / t.dur);
+    t.apply(p);
+    if (p < 1) requestAnimationFrame(tick); else finish();
+  };
+  requestAnimationFrame(tick);
+}
+function fitStage() {
+  const s = Math.min(innerWidth / W, innerHeight / H);
+  stage.style.transform = `translate(${(innerWidth - W * s) / 2}px,${(innerHeight - H * s) / 2}px) scale(${s})`;
+}
+addEventListener('resize', fitStage);
+addEventListener('keydown', e => {
+  if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(e.key)) { e.preventDefault(); go(cur + 1); }
+  else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(e.key)) { e.preventDefault(); go(cur - 1); }
+  else if (e.key === 'Home') go(0);
+  else if (e.key === 'End') go(SLIDES.length - 1);
+  else if (e.key === 'f' || e.key === 'F') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+});
+addEventListener('click', e => go(e.clientX < innerWidth * .2 ? cur - 1 : cur + 1));
+
+// ---------- Hooks for deck/check.py and deck/record.py ----------
+// freeze(i, j, p): show transition i → j at progress p (p = 1 ends it); repeated calls reuse one transition.
+// Returns the transition's duration in ms, so a recording keeps the on-screen timing.
+const visible = (sl, a) => {                     // fully shown on this slide and on screen
+  if (stateOp(sl, a) < .9 * a.base || a.base < .5) return false;
+  const r = toStage(sl.cam, a.T), c = ctr(r);
+  return c[0] > 0 && c[0] < W && c[1] > 0 && c[1] < H;
+};
+window.__deck = {
+  SLIDES, go, setState, W, H,
+  freeze(i, j, p) {
+    if (!(tr && tr.i === i && tr.j === j)) { finish(); cur = i; setState(i); tr = makeTrans(i, j); }
+    const dur = tr.dur; tr.apply(p); if (p >= 1) { finish(); cur = j; }
+    return dur;
+  },
+  // What a transition between two different diagrams does with each concept.
+  inspect(i, j) {
+    const A = SLIDES[i], B = SLIDES[j];
+    if (A.d === B.d) return { camera: true };
+    const m = match(A, B), pa = new Set(m.pairs.map(p => p[0])), pb = new Set(m.pairs.map(p => p[1]));
+    const ca = new Set(m.clones.filter(c => c[2] === 'a').map(c => c[1])), cb = new Set(m.clones.filter(c => c[2] === 'b').map(c => c[1]));
+    const fa = new Map(m.follow.filter(f => f[2] === 'a').map(f => [f[0], f[1]])), fb = new Map(m.follow.filter(f => f[2] === 'b').map(f => [f[0], f[1]]));
+    const movesA = x => pa.has(x.outer) || ca.has(x.outer) || (fa.has(x.outer) && fa.get(x.outer) !== 'region' && x.kind !== 'text');
+    const movesB = y => pb.has(y.outer) || cb.has(y.outer) || (fb.has(y.outer) && fb.get(y.outer) !== 'region' && y.kind !== 'text');
+    const shown = (sl, M, id) => (M.byId.get(id) || []).some(x => visible(sl, x.outer));
+    const both = [...m.MA.byId.keys()].filter(id => m.MB.byId.has(id) && (shown(A, m.MA, id) || shown(B, m.MB, id)));
+    const lost = both.filter(id => !(m.MA.byId.get(id).some(movesA) && m.MB.byId.get(id).some(movesB)));
+    const LA = layer(A.d), LB = layer(B.d);
+    const gone = LA.atoms.filter(a => a.kind === 'text' && !pa.has(a) && !ca.has(a) && visible(A, a));
+    const born = LB.atoms.filter(b => b.kind === 'text' && !pb.has(b) && !cb.has(b) && visible(B, b));
+    const bornTxt = new Set(born.map(b => bare(b.src.txt)));
+    const reappear = [...new Set(gone.filter(a => a.src.grp !== 'legend' && bornTxt.has(bare(a.src.txt))).map(a => a.src.txt))];
+    return { camera: false, sharedIds: both, lostIds: lost, reappearingText: reappear,
+             morphedArrows: m.arrows.filter(w => w.side === 'a' && w.mate).length,
+             pairedTexts: [...pa].filter(a => a.kind === 'text').length, newTexts: born.length, goneTexts: gone.length };
+  },
+  // Readability of a resting slide: smallest on-screen font size among the lines it shows, and how much is new.
+  stats(i) {
+    const sl = SLIDES[i], L = layer(sl.d);
+    const shown = L.atoms.filter(a => a.kind === 'text' && visible(sl, a));
+    const px = a => +(a.src.fs * sl.cam.s).toFixed(1);
+    // lines to read: new ones, and ones the camera just moved onto (an overview line only got a glance)
+    let fresh = shown.length;
+    if (i > 0) {
+      const P = SLIDES[i - 1];
+      if (P.d === sl.d) fresh = shown.filter(a => !(P.focus && visible(P, a))).length;
+      else { const m = match(P, sl), pb = new Map(m.pairs.map(p => [p[1], p[0]]));
+             fresh = shown.filter(b => !(pb.has(b) && visible(P, pb.get(b)))).length; }
+    }
+    const small = shown.filter(a => px(a) < (SPEC.minFontPx || 12)).map(a => [a.src.txt.slice(0, 40), px(a)]);
+    return { lines: shown.length, newLines: fresh, minPx: shown.length ? Math.min(...shown.map(px)) : null, small };
+  },
+  // On-screen boxes of the text lines currently visible (stage px), tagged with their transition partner.
+  textBoxes() {
+    const s = stage.getBoundingClientRect(), k = s.width / W, out = [];
+    const partner = new Map();
+    if (tr && tr.tracks) tr.tracks.forEach((t, n) => { partner.set(t.ta.atom, n); partner.set(t.tb.atom, n); });
+    for (const key in LAYERS) {
+      const L = LAYERS[key];
+      if (L.el.style.display === 'none') continue;
+      for (const a of L.atoms) {
+        if (a.kind !== 'text') continue;
+        const o = +a.el.style.opacity;
+        if (!(o > .35)) continue;
+        // the element may be as wide as its box (centred labels); map the glyphs' own box through its transform
+        const r = a.el.getBoundingClientRect(), sx = r.width / a.R[2], sy = r.height / a.R[3];
+        const g = [r.left + (a.T[0] - a.R[0]) * sx, r.top + (a.T[1] - a.R[1]) * sy, a.T[2] * sx, a.T[3] * sy];
+        out.push({ key: key + ':' + L.atoms.indexOf(a), txt: a.src.txt.slice(0, 40), op: o, pair: partner.has(a) ? partner.get(a) : null,
+                   r: [(g[0] - s.left) / k, (g[1] - s.top) / k, g[2] / k, g[3] / k] });
+      }
+    }
+    return out;
+  },
+};
+
+fitStage();
+cur = clamp((parseInt(location.hash.slice(1), 10) || 1) - 1, 0, SLIDES.length - 1);
+document.fonts.ready.then(() => { setState(cur); window.__ready = true; });
+</script>
+</body>
+</html>

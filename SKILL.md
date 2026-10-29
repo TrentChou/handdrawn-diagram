@@ -1,13 +1,18 @@
 ---
 name: handdrawn-diagram
-description: "Render hand-drawn (rough.js sketch-style) architecture and flow diagrams with a fixed 9-color palette, conventional print typography (Chinese 宋体 / 中宋 + Latin Times New Roman), and a no-emoji policy. Visual style is hand-drawn shapes + serif print text — like a textbook diagram or whiteboard sketch with engraved labels. Use when the user asks to draw, design, or render an architecture / flow / system diagram for WeChat articles, blog posts, slides, or technical docs, especially when several diagrams must share one visual language. Triggers: 画架构图 / 画流程图 / 手绘风 / 手绘流程图 / 草图风 / 白板风 / 配色统一 / 架构图样张 / draw architecture diagram / hand-drawn flowchart / sketch-style diagram / whiteboard-style diagram / consistent color palette across diagrams."
+description: "Render hand-drawn (rough.js sketch-style) architecture, flow and process diagrams with a fixed 9-color palette, serif print typography (Chinese 宋体 / 中宋 + Latin Times New Roman) and no emoji, keeping a whole series of figures in one visual language. Output is static PNGs for articles, docs and slides, or an animated walkthrough (offline HTML slides, optional MP4) that zooms from an overview into detail diagrams and morphs every concept shown on both instead of letting it vanish — for software, business processes, physical or natural systems alike. Triggers: 画架构图 / 画流程图 / 手绘风 / 手绘流程图 / 草图风 / 白板风 / 配色统一 / 架构图样张 / 动态讲解 / 动画演示 / 讲解视频 / 神奇移动 / draw architecture diagram / hand-drawn flowchart / sketch-style diagram / whiteboard-style diagram / consistent color palette across diagrams / animated diagram slides / Magic Move / diagram walkthrough video."
 license: MIT
-compatibility: Needs a Chromium-based browser (headless Chrome or Playwright) to rasterize HTML to PNG, and network access to load rough.js from jsDelivr and Noto Serif SC from Google Fonts.
+compatibility: Needs a Chromium-based browser (headless Chrome or Playwright) to rasterize HTML to PNG, and network access to load rough.js from jsDelivr and Noto Serif SC from Google Fonts. Animated decks additionally need Python 3.8+ with Playwright (Chromium); Pillow is optional (contact sheets); MP4 export needs ffmpeg.
 ---
 
 # Hand-drawn Diagram
 
 Render hand-drawn, sketch-style diagrams with a fixed palette, locked typography, and a no-emoji rule. Use this skill whenever the user wants multiple architecture / flow diagrams that share a unified visual language (e.g. one 微信 article with 5 figures).
+
+Two outputs, same drawings:
+
+- **Static figures** (default): one PNG per diagram.
+- **Animated deck**: the diagrams of a series played as slides — an overview, camera moves onto one part, that part morphs into its detail diagram, and back. A concept on both diagrams moves and reshapes instead of fading out and in. Delivered as one offline `deck.html`, optionally recorded to MP4. Each diagram is still a normal static figure; it only declares a stable id for every concept that appears on more than one diagram.
 
 ## When to load
 
@@ -15,6 +20,7 @@ Render hand-drawn, sketch-style diagrams with a fixed palette, locked typography
 - User wants visual consistency across multiple diagrams in one document/article
 - User asks to render a diagram and shows preference for hand-drawn style
 - Follow-up requests to extend / re-render a diagram in this style
+- User wants to walk an audience through a system or process on screen — slides, a talk, a screen recording, a video — or asks for animation / 动态 / Magic Move between diagrams
 
 Do NOT load for: simple Markdown table diagrams, Mermaid (use Mermaid directly), photorealistic illustrations.
 
@@ -31,6 +37,16 @@ Do NOT load for: simple Markdown table diagrams, Mermaid (use Mermaid directly),
 
 ## Workflow
 
+### Step 0 — Choose the output
+
+| The reader | Output |
+|---|---|
+| Reads it in an article, a document, or on paper; one figure answers the question | **Static figures** (default) — Steps 1–6 below |
+| Is walked through it on a screen (talk, lesson, recording, video), or one diagram is too dense and they must see where each zoom-in comes from | **Animated deck** — read `references/motion.md` first; it adds a storyboard and concept ids, then uses Steps 1–5 below for every diagram before building the deck |
+| Asks explicitly for slides, animation, video, Magic Move | **Animated deck** |
+
+When unsure, deliver static figures. They can become a deck later, usually by adding concept ids, sometimes with small layout changes so details keep their place and nothing collides in flight (`references/motion.md` §1.4, §1.6).
+
 ### Step 1 — Read references first
 
 Always skim before drawing:
@@ -38,6 +54,7 @@ Always skim before drawing:
 - `references/palette.md` — the 9 colors, each slot's **abstract meaning** (use this column to map non-Agent domains), and color-count / legend rules
 - `references/typography.md` — fonts, punctuation, no-emoji policy
 - `references/shapes.md` — shape semantics (box / channel / taskCard / bubble / hexagon / timeline / group frame)
+- `references/motion.md` — **animated deck only**: overview vs detail, object constancy, concept ids, camera and pacing, `deck.json`, build / check / record
 - `references/domains/` — per-domain concept→color dictionaries (alias table, shape sub-classification, decision tree, exclusion rules). **MUST READ the matching one if it exists:**
   - `domains/agent-team.md` — Agent Team / Multi-Agent / Memory / coding-agent / document-pipeline / research-pipeline
   - `domains/vertical-search.md` — search engines / crawling / indexing / retrieval & ranking
@@ -75,8 +92,9 @@ The template provides:
 - Label helpers: `lbl({...})` (two-line CN+EN), `plain({...})` (single line). Both inject `text` as HTML so `<b>` / `<br>` work; escape literal `<` and `&` as `&lt;` / `&amp;`.
 - Legend helper: `legend(x, y, items, cols, colW)` — color key, required only when a diagram uses more than 5 colors
 - Title helpers: `title(text, x, y)`, `subtitle(text, x, y)`; `LABEL_BG` — ivory label background for labels that sit on a line
+- Motion identity: every helper except `legend` takes an optional last argument `{ id, parent, from, to }`; optional arguments in front of it may be skipped, and `node` / `box` / `arrow` / `lbl` / `plain` take the fields inside the option object they already have. Static rendering ignores it; an animated deck uses it to morph the same concept between diagrams. See `references/motion.md` §4
 
-Edit only the `main()` function. Leave helpers untouched so all diagrams share identical visual baseline.
+Edit only the `main()` function. Leave helpers untouched so all diagrams share identical visual baseline, and keep the closing `main();` / `window.__renderDone = true;` lines as they are (the deck builder hooks in there).
 
 ### Step 4 — Render to PNG
 
@@ -106,6 +124,18 @@ await page.waitForFunction(() => window.__renderDone === true);
 await page.screenshot({ path: '/absolute/path/output.png', fullPage: true });
 ```
 
+The same in Python (the deck scripts use Python Playwright, so this needs nothing extra); `device_scale_factor=2` gives a 2× PNG:
+
+```python
+from playwright.sync_api import sync_playwright
+with sync_playwright() as p:
+    page = p.chromium.launch().new_page(viewport={'width': 1720, 'height': 1240}, device_scale_factor=2)
+    page.goto('file:///absolute/path/<your_diagram>.html')
+    page.evaluate('document.fonts.ready')
+    page.wait_for_function('window.__renderDone === true')
+    page.screenshot(path='/absolute/path/output.png', full_page=True)
+```
+
 Adjust canvas size in the template's `<div class="stage" style="width: ...; height: ...;">` and `<canvas width=... height=...>` to match diagram needs (default 1720 × 1240), and keep the browser window / viewport the same size.
 
 ### Step 5 — Self-check before delivery
@@ -132,7 +162,8 @@ Deliver the PNG itself using whatever attachment / image mechanism the host agen
 
 ## Examples
 
-- `examples/vertical-search/` — **worked multi-diagram series**: `diagram-binding.md` + overview / offline indexing / online retrieval, built with `node()` and `frame()`. Follow this when a request needs several diagrams, or when one diagram would get too dense to read.
+- `examples/vertical-search/` — **worked multi-diagram series**: `diagram-binding.md` + overview / offline indexing / online retrieval, built with `node()` and `frame()`. Follow this when a request needs several diagrams, or when one diagram would get too dense to read. The same three diagrams also carry concept ids and form an 11-slide animated deck (`deck.json` → `deck.html`): the advanced deck reference, with one → three splits, an explicit `parent`, and concepts travelling across three diagrams.
+- `examples/water-supply/` — **first animated deck to read**: city water supply, not software. Overview → camera on the plant → the plant box opens into a frame with four treatment steps → back. Two diagrams, five slides, `diagram-binding.md` with its concept-id table, `deck.json`, built `deck.html`. The code excerpts in `references/motion.md` come from here.
 - `examples/concept_palette_cheatsheet.html` + `.png` — **Agent Team color cheatsheet.** All 9 palette slots with Agent-domain aliases, shape sub-classifications, common colors, font/background demo, and exclusion rules in one 2400×1780 reference image. Look at this PNG before starting any Agent Team themed diagram.
 - `examples/coding_agent.html` + `.png` — **single dense diagram**: a coding agent handling an issue (orchestrator → developer in a sandbox → verifier → PR, with a red retry path). 8 colors with `legend()`, `frame()` for the sandbox, `hexagon()` for verify / failure. Built by copying the template and editing only `main()`, so its helpers are identical to `templates/diagram.html`.
 
@@ -144,3 +175,4 @@ Don't, unless absolutely needed across multiple diagrams. If you do:
 2. Add the shape helper to `templates/diagram.html`
 3. Update `references/shapes.md` with usage guidance
 4. Copy the updated helper block into every `examples/**/*.html` (they are full template copies), re-render them, and check the PNGs
+5. Give the new helper the optional last argument `o = {}` like the others, and add its name to one of the two wrap lists in `deck/build.py` (helpers that draw several strokes, or helpers that only pass identity on). A multi-stroke helper that draws one thing (like `taskCard`) also goes into `GROUPED` there, so it can be a concept. Then rebuild both example decks (`python3 deck/build.py examples/<name>/deck.json`) and run `deck/check.py` on each

@@ -1,0 +1,21 @@
+{
+  "title": "垂直搜索引擎 · 动态讲解",
+  "diagrams": {
+    "overview": "01_overview.html",
+    "offline": "02_offline.html",
+    "online": "03_online.html"
+  },
+  "slides": [
+    { "diagram": "overview", "note": "两条链路：离线建库写索引，在线检索读索引" },
+    { "diagram": "overview", "focus": ["user", "online-search"], "note": "用户的一次搜索只走在线链路" },
+    { "diagram": "online", "note": "在线检索展开成四个阶段" },
+    { "diagram": "online", "focus": ["query-understanding", "recall", "ranking", "assembly"], "note": "理解 → 召回 → 排序 → 组装，毫秒级完成" },
+    { "diagram": "online", "focus": ["embedding-model", "inverted-index", "vector-store", "ranking-model", "forward-store"], "note": "每个阶段各自读模型或索引" },
+    { "diagram": "overview", "note": "回到全局：索引是两条链路的交汇点" },
+    { "diagram": "overview", "focus": ["data-sources", "offline-build", "index-store"], "note": "离线链路负责把数据变成索引" },
+    { "diagram": "offline", "note": "离线建库展开成四道工序" },
+    { "diagram": "offline", "focus": ["url-queue", "crawler", "parser"], "note": "解析出的新链接回到抓取队列" },
+    { "diagram": "offline", "focus": ["inverted-index", "forward-store", "vector-store"], "note": "建库后写入三类存储" },
+    { "diagram": "overview", "note": "两条链路通过索引存储解耦" }
+  ]
+}

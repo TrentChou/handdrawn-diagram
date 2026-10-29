@@ -1,0 +1,14 @@
+{
+  "title": "城市供水 · 从水库到水龙头",
+  "diagrams": {
+    "overview": "01_overview.html",
+    "plant": "02_plant.html"
+  },
+  "slides": [
+    { "diagram": "overview", "note": "水从水库到水龙头经过四段" },
+    { "diagram": "overview", "focus": ["plant"], "note": "水厂负责把原水变成自来水" },
+    { "diagram": "plant", "note": "水厂里有四道工序，最后存进清水池" },
+    { "diagram": "plant", "focus": ["filtration", "disinfection"], "note": "过滤去掉颗粒，消毒杀灭细菌" },
+    { "diagram": "overview", "note": "处理好的水进入管网送到各家" }
+  ]
+}

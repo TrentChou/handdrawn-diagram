@@ -6,6 +6,8 @@
   - 9-role palette + shape helpers (box / channel / taskCard / bubble / hexagon / timeline / frame) + node() + legend()
   - Hard rules: no emoji; Latin = Times New Roman, CN = Songti family, never sans-serif / script / handwritten
   - Edit main() at the bottom to draw your own diagram. Keep helpers untouched.
+  - Every helper takes an optional last argument `o` for motion identity (id / parent / from / to).
+    A static render ignores it; an animated deck uses it to morph the same concept between diagrams.
 -->
 <html>
 <head>
@@ -93,6 +95,18 @@ const opts = (color, o = {}) => Object.assign({
 }, o);
 
 // ============================================================
+//  MOTION IDENTITY — only matters when this diagram becomes part of an animated deck
+//  (references/motion.md). Every helper except legend() accepts an identity object as its last argument:
+//    id      stable concept id, shared by every diagram that shows the concept: { id: 'plant' }
+//    parent  id of the concept this one belongs to; only needed when it is drawn outside that
+//            concept's box or frame: { id: 'sludge-tank', parent: 'plant' }
+//    from / to   (arrows) ids of the two concepts it connects; inferred from the endpoints if omitted
+//  Optional arguments in front of it may be skipped: frame(x, y, w, h, C.agent, '水厂', { id: 'plant' }).
+//  node / box / arrow / lbl / plain take the fields inside the option object they already have.
+//  Static rendering ignores all of these.
+// ============================================================
+
+// ============================================================
 //  ARROW — solid by default; pass { strokeLineDash: [10,7] } for dashed
 //  Pass o = { stroke: C.error.stroke, strokeLineDash: [10,7] } for error path
 // ============================================================
@@ -115,12 +129,12 @@ function box(x, y, w, h, color, override = {}) {
 }
 
 // Channel — flat horizontal strip (IM / Queue / Bus)
-function channel(x, y, w, h, color) {
+function channel(x, y, w, h, color, o = {}) {
   rc.rectangle(x, y, w, h, opts(color, { strokeWidth: 2.2 }));
 }
 
 // Task Card — folded-corner note (work unit / job / task)
-function taskCard(x, y, w, h, color) {
+function taskCard(x, y, w, h, color, o = {}) {
   const fold = 14;
   const path = `M${x} ${y} L${x+w-fold} ${y} L${x+w} ${y+fold} L${x+w} ${y+h} L${x} ${y+h} Z`;
   rc.path(path, opts(color, { strokeWidth: 1.8, roughness: 1.3 }));
@@ -129,7 +143,8 @@ function taskCard(x, y, w, h, color) {
 }
 
 // Bubble — speech bubble for Status / Notification (left or right tail)
-function bubble(x, y, w, h, color, tailSide = 'left') {
+function bubble(x, y, w, h, color, tailSide = 'left', o = {}) {
+  if (typeof tailSide === 'object') { o = tailSide; tailSide = 'left'; }
   rc.rectangle(x, y, w, h, opts(color, { strokeWidth: 2, roughness: 1.3 }));
   const tailY = y + h * 0.5;
   if (tailSide === 'left') {
@@ -142,7 +157,7 @@ function bubble(x, y, w, h, color, tailSide = 'left') {
 }
 
 // Hexagon — used for Error / Decision / 异常兜底
-function hexagon(cx, cy, w, h, color) {
+function hexagon(cx, cy, w, h, color, o = {}) {
   const dx = w / 2, dy = h / 2, ear = w * 0.18;
   const pts = [
     [cx - dx + ear, cy - dy],
@@ -156,7 +171,7 @@ function hexagon(cx, cy, w, h, color) {
 }
 
 // Timeline — horizontal dashed line with tick marks
-function timeline(x1, y, x2, marks /* [{x,text}] — text rendered separately via plain() */) {
+function timeline(x1, y, x2, marks /* [{x,text}] — text rendered separately via plain() */, o = {}) {
   rc.line(x1, y, x2, y, { stroke: C.flow, strokeWidth: 1.6, roughness: 1, strokeLineDash: [6, 8] });
   marks.forEach(m => {
     rc.line(m.x, y - 6, m.x, y + 6, { stroke: C.flow, strokeWidth: 1.6, roughness: 1 });
@@ -200,12 +215,14 @@ function plain({ text, x, y, w, color='#3a3530', size=18, weight=400, bg=null, a
 }
 
 // Canvas title (Times bold for Latin, Zhongsong for Chinese — fillText supports CJK fine)
-function title(text, x, y, size=44) {
+function title(text, x, y, size=44, o = {}) {
+  if (typeof size === 'object') { o = size; size = 44; }
   ctx.font = `700 ${size}px ${FONT_TI}`;
   ctx.fillStyle = C.title;
   ctx.fillText(text, x, y);
 }
-function subtitle(text, x, y, size=22) {
+function subtitle(text, x, y, size=22, o = {}) {
+  if (typeof size === 'object') { o = size; size = 22; }
   ctx.font = `400 ${size}px ${FONT_BD}`;
   ctx.fillStyle = C.subtitle;
   ctx.fillText(text, x, y);
@@ -218,24 +235,28 @@ const LABEL_BG = 'rgba(253,253,250,.94)';
 //  COMPOSITE HELPERS
 // ============================================================
 // Node — box + vertically centered two-line label in the box's stroke color.
-//   node(x, y, w, h, C.agent, '在线检索', 'Query 理解 · 召回', { box: { strokeWidth: 3 }, size: 30 })
+//   node(x, y, w, h, C.agent, '在线检索', 'Query 理解 · 召回', { box: { strokeWidth: 3 }, size: 30, id: 'online-search' })
 function node(x, y, w, h, color, text, sub, o = {}) {
+  if (sub && typeof sub === 'object') { o = sub; sub = ''; }
   const size = o.size || 23, subSize = o.subSize || 15;
   box(x, y, w, h, color, o.box || {});
-  const textH = size * 1.22 + (sub ? 3 + subSize * 1.22 : 0);
+  const subLines = sub ? String(sub).split(/<br\s*\/?>/i).length : 0;
+  const textH = size * 1.22 + (sub ? 3 + subSize * 1.22 * subLines : 0);
   lbl({ text, sub, x, y: y + (h - textH) / 2, w, color: color.stroke, size, subSize });
 }
 
 // Group Frame — dashed boundary around a group of nodes (subsystem / sandbox / plan).
 // Drawn as 4 dashed lines, never rc.rectangle (a rough rectangle can paint fill over the nodes inside).
 // The title sits on the top edge with LABEL_BG so the dashed line does not cross it.
-//   frame(340, 280, 1330, 210, C.agent, '在线检索')
-function frame(x, y, w, h, color, label, labelW = 160) {
-  const o = { stroke: color.stroke, strokeWidth: 1.6, roughness: 1.2, strokeLineDash: [10, 6] };
-  rc.line(x, y, x + w, y, o);
-  rc.line(x + w, y, x + w, y + h, o);
-  rc.line(x + w, y + h, x, y + h, o);
-  rc.line(x, y + h, x, y, o);
+//   frame(340, 280, 1330, 210, C.agent, '在线检索', 160, { id: 'online-search' })
+function frame(x, y, w, h, color, label, labelW = 160, o = {}) {
+  if (label && typeof label === 'object') { o = label; label = ''; }
+  if (typeof labelW === 'object') { o = labelW; labelW = 160; }
+  const line = { stroke: color.stroke, strokeWidth: 1.6, roughness: 1.2, strokeLineDash: [10, 6] };
+  rc.line(x, y, x + w, y, line);
+  rc.line(x + w, y, x + w, y + h, line);
+  rc.line(x + w, y + h, x, y + h, line);
+  rc.line(x, y + h, x, y, line);
   if (label) plain({ text: label, x: x + 18, y: y - 13, w: labelW, color: color.stroke,
                      size: 17, weight: 700, bg: LABEL_BG, align: 'left' });
 }
@@ -260,16 +281,17 @@ function main() {
   // Concept color binding (diagram-binding.md):
   //   C.user = 用户 · C.agent = 在线检索 (主角) · C.llm = 模型 · C.memory = 存储
   // Not in this diagram: external, subagent, im, error
+  // Motion ids: the overview's online-search box becomes the frame; index-store splits into three stores
   title('在线检索 · 一次搜索请求的链路', 70, 80);
   subtitle('Query 理解 → 多路召回 → 排序 → 结果组装 · 全链路毫秒级响应', 70, 118);
 
-  node(70, 330, 200, 120, C.user, '用户', '输入查询词');
+  node(70, 330, 200, 120, C.user, '用户', '输入查询词', { id: 'user' });
 
-  const P = [['① Query 理解', '分词 · 纠错 · 意图识别'], ['② 多路召回', '关键词 + 向量 · 千条候选'],
-             ['③ 排序', '粗排 → 精排 · 取 Top N'], ['④ 结果组装', '摘要 · 高亮 · 分页']];
+  const P = [['① Query 理解', '分词 · 纠错 · 意图识别', 'query-understanding'], ['② 多路召回', '关键词 + 向量 · 千条候选', 'recall'],
+             ['③ 排序', '粗排 → 精排 · 取 Top N', 'ranking'], ['④ 结果组装', '摘要 · 高亮 · 分页', 'assembly']];
   const PX = i => 380 + i * 340;
-  P.forEach(([t, s], i) => node(PX(i), 330, 230, 120, C.agent, t, s));
-  frame(340, 282, 1330, 210, C.agent, '在线检索', 100);
+  P.forEach(([t, s, id], i) => node(PX(i), 330, 230, 120, C.agent, t, s, { id }));
+  frame(340, 282, 1330, 210, C.agent, '在线检索', 100, { id: 'online-search' });
   for (let i = 0; i < 3; i++) arrow(PX(i) + 232, 390, PX(i + 1) - 4, 390);
 
   arrow(272, 390, 376, 390);
@@ -282,11 +304,11 @@ function main() {
   arrow(170, 205, 170, 326);
   plain({ text: '⑤ 搜索结果页', x: 840, y: 192, w: 130, size: 17, bg: LABEL_BG });
 
-  node(PX(0), 610, 230, 100, C.llm, 'Embedding 模型', '查询转向量', { size: 21 });
-  node(PX(1), 610, 110, 100, C.memory, '倒排索引', '关键词', { size: 19 });
-  node(PX(1) + 120, 610, 110, 100, C.memory, '向量库', '语义', { size: 19 });
-  node(PX(2), 610, 230, 100, C.llm, '排序模型', '相关性打分', { size: 21 });
-  node(PX(3), 610, 230, 100, C.memory, '正排库', '标题 · 摘要 · 字段', { size: 21 });
+  node(PX(0), 610, 230, 100, C.llm, 'Embedding 模型', '查询转向量', { size: 21, id: 'embedding-model' });
+  node(PX(1), 610, 110, 100, C.memory, '倒排索引', '关键词', { size: 19, id: 'inverted-index', parent: 'index-store' });
+  node(PX(1) + 120, 610, 110, 100, C.memory, '向量库', '语义', { size: 19, id: 'vector-store', parent: 'index-store' });
+  node(PX(2), 610, 230, 100, C.llm, '排序模型', '相关性打分', { size: 21, id: 'ranking-model' });
+  node(PX(3), 610, 230, 100, C.memory, '正排库', '标题 · 摘要 · 字段', { size: 21, id: 'forward-store', parent: 'index-store' });
   [PX(0) + 115, PX(1) + 55, PX(1) + 175, PX(2) + 115, PX(3) + 115].forEach(x => arrow(x, 608, x, 454));
 }
 

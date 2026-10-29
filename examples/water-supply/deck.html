@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>城市供水 · 从水库到水龙头</title>
+<!--
+  Animated deck player for hand-drawn diagrams. deck/build.py inlines the diagram data below and writes one
+  offline file. Every slide is one diagram seen through a camera (whole canvas, or a focus region with the rest
+  dimmed). Between slides of the same diagram the camera moves; between different diagrams the elements morph:
+  a concept present on both sides (same motion id, or failing that the same text) moves and reshapes into its
+  new form, details only one side has grow out of / shrink back into their parent, arrows stay attached to the
+  concepts they connect. Keys: → / space / Enter next, ← back, Home / End, F fullscreen; #N in the URL opens slide N.
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #fdfdfa; overflow: hidden; cursor: default; }
+  #stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden; background: #fdfdfa; }
+  .layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: none; }
+  .a { position: absolute; transform-origin: 0 0; box-sizing: border-box; margin: 0; }
+  .a svg { display: block; overflow: visible; }
+  img.a { display: block; }
+  .ti { font-family: 'Times New Roman', Times, 'STZhongsong', '华文中宋', 'Songti SC', 'SimSun', '宋体', 'Noto Serif SC', serif; font-weight: 700; }
+  .bd { font-family: 'Times New Roman', Times, 'Songti SC', 'STSong', 'SimSun', '宋体', 'Noto Serif SC', serif; font-weight: 400; }
+  /* text in flight keeps a paper-coloured halo, so the lines it crosses do not cut through it */
+  .gh { text-shadow: 0 0 2px #fdfdfa, 0 0 6px #fdfdfa, 0 0 12px #fdfdfa; }
+</style>
+<script>window.DECK = {"spec":{"title":"城市供水 · 从水库到水龙头","slides":[{"diagram":"overview","note":"水从水库到水龙头经过四段"},{"diagram":"overview","focus":["plant"],"note":"水厂负责把原水变成自来水"},{"diagram":"plant","note":"水厂里有四道工序，最后存进清水池"},{"diagram":"plant","focus":["filtration","disinfection"],"note":"过滤去掉颗粒，消毒杀灭细菌"},{"diagram":"overview","note":"处理好的水进入管网送到各家"}]},"data":{"overview":{"w":1580,"h":500,"shapes":[{"seq":3,"ends":null,"r":[83.5,263.9,244.2,133.2],"svg":"<g><path d=\"M90.9 271.8 L317.0 271.7 L317.1 389.1 L90.0 388.4\" stroke=\"none\" stroke-width=\"0\" fill=\"#e9e7e3\"><\/path><path d=\"M91.5 268.8 C142.7 270.0, 201.3 273.7, 320.5 270.5 M89.4 268.8 C146.7 271.3, 204.5 270.4, 319.3 269.8 M322.7 272.2 C321.7 314.3, 318.7 359.7, 319.7 387.5 M319.1 269.3 C322.2 301.8, 323.2 335.7, 319.8 390.2 M318.7 388.0 C264.8 391.0, 212.6 395.2, 88.6 388.3 M319.9 390.0 C232.4 384.7, 145.9 385.6, 89.1 389.4 M88.5 387.2 C88.9 344.8, 92.3 297.8, 89.6 272.3 M91.5 391.0 C90.4 354.3, 88.9 316.0, 89.9 269.4\" stroke=\"#4f5359\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"water-source","node":0},{"seq":5,"ends":null,"r":[441.8,237.4,335.7,186.5],"svg":"<g><path d=\"M447.8 242.3 L772.5 243.9 L767.6 415.0 L451.5 412.7\" stroke=\"none\" stroke-width=\"0\" fill=\"#f3e2cf\"><\/path><path d=\"M448.9 246.3 C538.5 245.7, 621.7 249.7, 768.1 244.2 M449.9 244.3 C576.6 242.5, 701.2 243.1, 770.7 244.8 M772.3 245.5 C765.1 290.1, 765.7 328.7, 768.5 415.0 M769.3 244.3 C768.5 305.9, 770.4 368.3, 770.1 414.6 M769.8 413.4 C648.8 419.4, 532.0 421.1, 448.5 414.6 M768.9 414.9 C658.7 418.9, 547.4 416.8, 450.2 414.3 M446.8 417.1 C450.0 363.7, 448.2 315.8, 450.3 244.2 M448.8 414.5 C449.5 352.3, 452.4 289.4, 451.4 244.5\" stroke=\"#a04a1f\" stroke-width=\"3\" fill=\"none\"><\/path><\/g>","grp":null,"id":"plant","node":1},{"seq":7,"ends":null,"r":[893.3,287,273.6,87.1],"svg":"<g><path d=\"M901.7 297.8 L1160.8 295.2 L1160.5 367.5 L902.9 364.5\" stroke=\"none\" stroke-width=\"0\" fill=\"#dde8e7\"><\/path><path d=\"M898.6 292.7 C987.2 298.2, 1070.6 297.8, 1161.2 295.6 M899.6 295.6 C972.0 291.0, 1042.4 291.2, 1160.9 293.9 M1161.9 295.9 C1156.7 319.9, 1159.4 341.2, 1161.6 366.5 M1159.0 293.4 C1160.0 315.4, 1159.4 334.5, 1160.2 364.5 M1160.0 367.2 C1091.3 370.4, 1019.5 369.7, 900.7 363.9 M1160.4 365.5 C1077.4 363.1, 997.7 362.0, 899.7 364.7 M898.7 365.6 C900.3 342.4, 895.6 326.0, 900.8 297.1 M900.7 363.4 C899.7 348.2, 901.1 333.5, 900.6 295.0\" stroke=\"#106668\" stroke-width=\"2.2\" fill=\"none\"><\/path><\/g>","grp":null,"id":"pipe-network","node":2},{"seq":9,"ends":null,"r":[1263.4,263.9,232.7,134.2],"svg":"<g><path d=\"M1269.6 270.7 L1487.9 270.8 L1491.0 389.1 L1268.3 393.1\" stroke=\"none\" stroke-width=\"0\" fill=\"#e3ebf2\"><\/path><path d=\"M1270.5 270.4 C1332.1 269.0, 1388.8 270.0, 1491.0 271.7 M1268.7 271.0 C1322.4 268.0, 1375.6 268.5, 1488.9 271.0 M1488.5 272.2 C1484.8 311.6, 1485.2 345.5, 1487.8 391.1 M1488.8 268.8 C1489.4 316.8, 1491.0 366.1, 1490.1 388.8 M1487.6 390.4 C1408.7 390.9, 1329.3 388.6, 1271.8 387.5 M1489.1 391.3 C1413.3 392.4, 1339.1 394.5, 1270.5 388.8 M1272.1 388.6 C1271.6 361.6, 1271.9 331.3, 1273.1 269.2 M1268.5 391.2 C1270.3 350.5, 1272.6 311.0, 1270.9 270.8\" stroke=\"#1f5582\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"users","node":3},{"seq":11,"ends":[322,330,446,330],"r":[317.1,317.4,135.8,24.2],"svg":"<g><path d=\"M322.1 328.0 C365.6 331.5, 410.6 330.7, 444.8 327.7 M322.3 329.2 C357.0 329.9, 389.9 331.1, 446.8 329.2\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M446.7 331.4 C443.0 331.3, 436.8 336.1, 432.7 336.4 M445.5 329.3 C442.1 332.0, 438.9 334.4, 433.1 336.5\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M447.8 331.2 C442.3 326.1, 436.6 323.1, 434.3 322.3 M446.4 329.6 C441.3 327.8, 436.4 325.5, 433.1 323.1\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"water-source","to":"plant"},{"seq":15,"ends":[772,330,896,330],"r":[766.5,317.3,135.7,25.4],"svg":"<g><path d=\"M772.7 328.2 C812.8 328.1, 854.8 328.8, 897.1 328.9 M771.5 329.9 C810.5 330.8, 849.1 331.1, 897.2 331.1\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M895.3 329.2 C892.2 333.2, 889.4 334.6, 882.5 335.0 M896.2 330.1 C891.8 332.8, 889.1 333.4, 884.3 337.6\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M895.7 331.5 C892.7 330.1, 892.6 325.5, 882.2 322.6 M895.9 330.4 C891.9 327.7, 887.5 325.7, 884.5 322.2\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"plant","to":"pipe-network"},{"seq":19,"ends":[1162,330,1266,330],"r":[1156,317.5,116.8,24.9],"svg":"<g><path d=\"M1161.1 327.5 C1186.3 330.5, 1207.0 326.4, 1263.9 332.2 M1160.9 330.2 C1200.6 331.5, 1238.4 330.2, 1265.0 331.3\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1264.3 331.2 C1262.0 332.5, 1261.2 333.9, 1252.2 337.4 M1265.6 330.2 C1262.9 331.4, 1260.6 332.5, 1253.6 337.1\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1267.7 328.1 C1262.8 328.9, 1261.2 327.2, 1252.1 323.7 M1266.2 329.2 C1261.0 327.5, 1256.3 324.8, 1253.6 322.5\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"pipe-network","to":"users"}],"texts":[{"seq":1,"r":[90,41,520.7,49],"t":[90,41,520.7,49],"txt":"城市供水 · 从水库到水龙头","html":"城市供水 · 从水库到水龙头","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:44px;font-weight:700;font-style:normal;line-height:49px;color:rgb(42, 37, 32);text-align:start;letter-spacing:normal;white-space:nowrap;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":44,"grp":"title"},{"seq":2,"r":[90,98,484,25],"t":[90,98,484,25],"txt":"原水经水厂净化成自来水，再由管网加压送到各家","html":"原水经水厂净化成自来水，再由管网加压送到各家","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:22px;font-weight:400;font-style:normal;line-height:25px;color:rgb(90, 84, 79);text-align:start;letter-spacing:normal;white-space:nowrap;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":22,"grp":"subtitle"},{"seq":4,"r":[90,305.3,230,28],"t":[182,306.3,46,25],"txt":"水源","html":"水源","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(79, 83, 89);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"water-source","node":0},{"seq":4,"r":[90,336.4,230,18.3],"t":[168.8,337.4,72.5,16],"txt":"水库 · 河流","html":"水库 · 河流","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(79, 83, 89);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"water-source","node":0},{"seq":6,"r":[450,299.8,320,36.6],"t":[580,300.8,60,33],"txt":"水厂","html":"水厂","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:30px;font-weight:700;font-style:normal;line-height:36.6px;color:rgb(160, 74, 31);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":30,"grp":null,"id":"plant","node":1},{"seq":6,"r":[450,339.4,320,20.7],"t":[568.9,339.4,82.2,19],"txt":"净化 · 消毒","html":"净化 · 消毒","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:400;font-style:normal;line-height:20.74px;color:rgb(160, 74, 31);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":17,"grp":null,"id":"plant","node":1},{"seq":8,"r":[900,306,260,26.8],"t":[986,306,88,25],"txt":"供水管网","html":"供水管网","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:22px;font-weight:700;font-style:normal;line-height:26.84px;color:rgb(16, 102, 104);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":22,"grp":null,"node":2},{"seq":8,"r":[900,335.8,260,18.3],"t":[978.8,336.8,102.5,16],"txt":"泵站 · 地下管道","html":"泵站 · 地下管道","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(16, 102, 104);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"node":2},{"seq":10,"r":[1270,305.3,220,28],"t":[1357,306.3,46,25],"txt":"用户","html":"用户","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(31, 85, 130);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"users","node":3},{"seq":10,"r":[1270,336.4,220,18.3],"t":[1322.5,337.4,115,16],"txt":"住宅 · 学校 · 工厂","html":"住宅 · 学校 · 工厂","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(31, 85, 130);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"users","node":3},{"seq":14,"r":[349,296,70,22.7],"t":[367,297,34,19],"txt":"原水","html":"原水","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:400;font-style:normal;line-height:20.74px;color:rgb(58, 53, 48);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":17,"grp":null},{"seq":18,"r":[794,296,80,22.7],"t":[808.5,297,51,19],"txt":"自来水","html":"自来水","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:400;font-style:normal;line-height:20.74px;color:rgb(58, 53, 48);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":17,"grp":null},{"seq":22,"r":[1179,296,70,22.7],"t":[1197,297,34,19],"txt":"入户","html":"入户","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:400;font-style:normal;line-height:20.74px;color:rgb(58, 53, 48);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":17,"grp":null}],"images":[],"nodes":[{"shapes":[0],"texts":[2,3],"id":"water-source","parent":null,"r":[83.5,263.9,244.2,133.2]},{"shapes":[1],"texts":[4,5],"id":"plant","parent":null,"r":[441.8,237.4,335.7,186.5]},{"shapes":[2],"texts":[6,7],"id":"pipe-network","parent":null,"r":[893.3,287,273.6,87.1]},{"shapes":[3],"texts":[8,9],"id":"users","parent":null,"r":[1263.4,263.9,232.7,134.2]}]},"plant":{"w":1920,"h":520,"shapes":[{"seq":3,"ends":null,"r":[52.3,292,194.6,116],"svg":"<g><path d=\"M61.8 299.1 L237.1 303.0 L238.1 400.9 L57.2 397.8\" stroke=\"none\" stroke-width=\"0\" fill=\"#e9e7e3\"><\/path><path d=\"M57.2 297.9 C108.5 299.0, 162.5 301.9, 237.5 299.3 M60.1 299.4 C99.8 303.8, 141.4 303.5, 241.4 300.3 M241.3 298.8 C240.4 333.6, 241.8 366.4, 239.0 398.9 M239.0 300.8 C238.7 323.2, 236.3 346.8, 239.2 400.5 M241.8 403.0 C180.3 402.9, 121.4 400.8, 61.6 402.7 M239.6 401.5 C169.3 400.1, 98.2 401.5, 59.1 399.7 M59.0 402.6 C56.9 361.0, 59.3 330.4, 59.9 297.0 M58.8 400.0 C59.6 378.6, 59.2 357.3, 61.3 298.4\" stroke=\"#4f5359\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"water-source","node":0},{"seq":5,"ends":null,"r":[293.2,231.7,1243.1,234.8],"svg":"<g><path d=\"M299.3 239.8 C774.2 238.1, 1249.8 236.4, 1530.4 239.1 M300.4 240.0 C697.3 235.3, 1094.0 235.5, 1530.3 240.4\" stroke=\"#a04a1f\" stroke-width=\"1.6\" fill=\"none\" stroke-dasharray=\"10 6\"><\/path><\/g><g><path d=\"M1529.4 238.4 C1528.1 311.2, 1530.0 379.2, 1529.5 461.3 M1529.6 240.5 C1531.4 293.4, 1532.3 346.3, 1529.0 459.6\" stroke=\"#a04a1f\" stroke-width=\"1.6\" fill=\"none\" stroke-dasharray=\"10 6\"><\/path><\/g><g><path d=\"M1529.9 459.4 C1201.0 455.3, 871.3 454.6, 299.8 459.9 M1529.7 459.8 C1125.5 459.1, 721.1 459.1, 299.9 459.8\" stroke=\"#a04a1f\" stroke-width=\"1.6\" fill=\"none\" stroke-dasharray=\"10 6\"><\/path><\/g><g><path d=\"M298.2 461.4 C302.6 399.8, 302.7 339.9, 300.5 241.4 M299.4 460.4 C299.0 402.1, 299.6 343.9, 299.6 239.0\" stroke=\"#a04a1f\" stroke-width=\"1.6\" fill=\"none\" stroke-dasharray=\"10 6\"><\/path><\/g>","grp":"frame","id":"plant","label":4},{"seq":10,"ends":null,"r":[332.1,287.1,205.9,136],"svg":"<g><path d=\"M338.6 297.0 L529.1 294.7 L529.4 414.6 L338.5 412.3\" stroke=\"none\" stroke-width=\"0\" fill=\"#f4eacd\"><\/path><path d=\"M338.1 292.1 C379.2 298.8, 424.4 296.6, 530.4 297.3 M338.8 295.0 C409.1 292.6, 477.4 292.6, 530.3 296.4 M526.8 296.3 C530.3 332.6, 531.6 374.0, 533.0 417.2 M531.4 296.1 C529.9 325.6, 531.4 354.9, 530.2 414.5 M527.2 418.1 C477.7 412.5, 420.3 413.4, 341.7 412.8 M531.2 413.5 C453.9 418.6, 380.8 419.4, 338.4 415.8 M337.1 413.9 C339.9 382.3, 339.5 348.6, 340.5 297.0 M341.1 415.7 C338.1 376.1, 336.9 338.0, 341.2 293.7\" stroke=\"#7d4f0a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"coagulation","node":1},{"seq":12,"ends":null,"r":[572.1,287.8,205.9,135.4],"svg":"<g><path d=\"M577.1 295.0 L770.6 297.3 L767.8 416.3 L578.8 416.3\" stroke=\"none\" stroke-width=\"0\" fill=\"#f4eacd\"><\/path><path d=\"M582.8 292.8 C651.3 294.5, 720.2 297.8, 769.7 297.3 M580.4 295.1 C645.7 294.8, 709.0 294.1, 768.6 296.0 M772.5 293.5 C774.6 337.8, 769.5 377.4, 766.9 412.3 M771.5 295.6 C768.2 340.1, 769.6 383.2, 771.3 415.9 M768.3 416.0 C692.6 411.7, 620.6 412.5, 580.6 416.0 M771.1 416.0 C702.6 418.4, 636.8 419.3, 581.5 416.3 M582.8 414.4 C580.4 372.9, 576.8 334.8, 580.1 293.0 M581.1 415.0 C578.2 370.9, 577.5 328.4, 581.3 295.2\" stroke=\"#7d4f0a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"sedimentation","node":2},{"seq":14,"ends":null,"r":[812.4,288.1,205.8,134.9],"svg":"<g><path d=\"M821.6 295.2 L1012.6 295.7 L1007.3 412.3 L819.5 412.5\" stroke=\"none\" stroke-width=\"0\" fill=\"#f4eacd\"><\/path><path d=\"M817.3 295.4 C884.1 298.2, 951.3 295.9, 1008.2 293.7 M820.9 295.1 C868.8 297.5, 917.4 299.0, 1011.4 296.3 M1007.3 294.0 C1006.6 344.1, 1008.4 386.6, 1013.1 415.8 M1011.3 295.8 C1011.5 342.5, 1009.9 391.6, 1010.0 414.5 M1008.8 412.6 C936.4 418.8, 863.7 419.4, 822.4 414.6 M1010.3 415.7 C944.0 413.8, 875.0 413.4, 821.5 416.0 M820.3 418.0 C816.0 384.5, 816.6 346.1, 821.9 293.0 M820.3 416.3 C822.4 375.9, 821.1 335.8, 819.5 296.3\" stroke=\"#7d4f0a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"filtration","node":3},{"seq":16,"ends":null,"r":[1052.4,287.5,205.7,134.7],"svg":"<g><path d=\"M1057.8 292.5 L1249.6 294.1 L1249.4 417.0 L1057.3 417.2\" stroke=\"none\" stroke-width=\"0\" fill=\"#f4eacd\"><\/path><path d=\"M1059.1 293.1 C1100.6 299.7, 1142.0 298.8, 1248.2 296.6 M1058.7 294.5 C1135.6 293.5, 1209.5 292.2, 1251.4 294.4 M1253.0 297.6 C1250.7 326.5, 1252.3 361.9, 1249.0 414.3 M1250.7 293.9 C1247.3 320.0, 1248.4 343.2, 1248.4 414.3 M1251.5 412.7 C1202.6 416.1, 1155.4 415.1, 1062.0 414.7 M1248.6 416.5 C1191.1 415.5, 1133.5 413.8, 1059.0 413.8 M1062.4 412.0 C1057.6 367.9, 1057.7 326.4, 1058.7 294.1 M1061.5 415.8 C1058.0 387.6, 1057.2 358.5, 1059.5 294.4\" stroke=\"#7d4f0a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"disinfection","node":4},{"seq":18,"ends":null,"r":[1292.7,287.8,205.2,134.5],"svg":"<g><path d=\"M1300.9 295.0 L1492.8 296.0 L1491.4 414.4 L1300.9 416.0\" stroke=\"none\" stroke-width=\"0\" fill=\"#ede2d5\"><\/path><path d=\"M1299.8 295.5 C1355.0 292.7, 1406.2 294.0, 1489.6 295.3 M1300.7 294.0 C1358.0 296.1, 1414.8 296.2, 1488.8 293.9 M1488.6 296.0 C1488.4 325.5, 1489.5 353.0, 1491.4 415.7 M1488.9 293.8 C1492.0 320.6, 1491.6 343.4, 1490.9 415.5 M1487.9 415.1 C1421.8 420.0, 1355.2 415.0, 1302.4 414.0 M1488.8 414.0 C1440.5 418.2, 1393.0 417.0, 1299.7 413.5 M1297.8 414.3 C1296.8 372.3, 1300.9 328.5, 1299.7 292.7 M1299.1 416.4 C1298.3 386.7, 1299.8 356.7, 1299.1 294.7\" stroke=\"#6e554a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"clear-well","node":5},{"seq":20,"ends":[532,355,576,355],"r":[525.6,342.1,58.1,25.5],"svg":"<g><path d=\"M532.1 354.9 C546.9 353.1, 558.0 353.0, 578.7 353.6 M530.6 354.6 C546.1 356.7, 557.4 356.3, 577.1 354.7\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M575.8 354.1 C571.7 356.4, 569.0 360.1, 565.5 362.6 M576.0 355.7 C572.4 358.1, 568.7 359.7, 564.3 362.2\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M576.3 354.2 C572.7 352.1, 566.9 350.2, 562.5 348.0 M575.8 355.0 C570.4 352.2, 566.5 349.9, 563.3 347.1\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"coagulation","to":"sedimentation"},{"seq":23,"ends":[772,355,816,355],"r":[764.7,342.4,58.2,25.4],"svg":"<g><path d=\"M769.6 354.0 C785.2 354.0, 802.8 355.3, 817.4 355.1 M772.7 355.0 C789.5 353.9, 804.4 354.2, 815.3 355.7\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M814.0 355.9 C811.7 357.9, 806.7 358.9, 805.3 362.7 M815.8 354.0 C813.7 356.6, 808.8 359.0, 804.7 361.0\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M817.8 355.6 C811.4 354.6, 811.3 352.3, 805.0 349.3 M816.8 355.3 C812.9 353.0, 808.5 351.1, 802.9 347.3\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"sedimentation","to":"filtration"},{"seq":26,"ends":[1012,355,1056,355],"r":[1005.7,342.8,55.8,25.1],"svg":"<g><path d=\"M1010.7 353.6 C1022.3 352.6, 1035.3 357.5, 1053.6 352.3 M1011.5 355.1 C1027.3 354.0, 1041.6 354.0, 1055.7 356.0\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1056.2 355.6 C1050.8 358.1, 1047.0 359.5, 1042.4 360.3 M1055.1 354.5 C1051.5 358.4, 1045.7 360.5, 1044.4 362.9\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1054.9 353.1 C1051.9 352.0, 1045.1 350.7, 1045.0 347.8 M1056.5 355.7 C1051.1 353.2, 1046.5 350.1, 1043.8 348.1\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"filtration","to":"disinfection"},{"seq":29,"ends":[1252,355,1296,355],"r":[1244.4,341.8,58.6,26.5],"svg":"<g><path d=\"M1249.3 357.5 C1260.4 355.2, 1273.9 353.9, 1298.0 353.0 M1252.7 354.8 C1267.6 354.7, 1284.6 354.7, 1295.5 353.8\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1295.6 356.2 C1292.7 357.6, 1287.2 359.2, 1282.1 363.3 M1296.7 354.3 C1292.2 356.9, 1288.3 360.3, 1284.4 361.6\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1296.1 356.7 C1293.9 351.4, 1289.4 353.0, 1283.1 346.8 M1296.5 354.8 C1292.1 353.5, 1290.3 351.4, 1284.0 348.8\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"disinfection","to":"clear-well"},{"seq":32,"ends":null,"r":[1653.4,312.4,233.9,86.5],"svg":"<g><path d=\"M1659.3 322.6 L1882.3 317.9 L1880.3 390.8 L1660.5 391.5\" stroke=\"none\" stroke-width=\"0\" fill=\"#dde8e7\"><\/path><path d=\"M1660.5 322.3 C1707.2 317.8, 1754.0 314.5, 1882.1 320.9 M1660.7 319.3 C1710.8 322.2, 1761.1 321.1, 1881.3 321.3 M1877.1 319.9 C1879.1 342.4, 1882.9 369.8, 1879.8 388.8 M1878.4 320.5 C1878.6 340.0, 1881.3 358.8, 1880.9 388.5 M1878.7 391.1 C1818.7 396.5, 1757.7 392.2, 1660.6 392.5 M1880.4 390.1 C1816.5 387.2, 1756.2 388.2, 1660.1 391.3 M1658.4 391.8 C1662.5 373.7, 1660.0 355.2, 1660.1 322.7 M1660.6 391.2 C1661.6 370.6, 1659.7 352.8, 1659.4 320.1\" stroke=\"#106668\" stroke-width=\"2.2\" fill=\"none\"><\/path><\/g>","grp":null,"id":"pipe-network","node":6},{"seq":34,"ends":[242,350,336,350],"r":[236.9,338.4,105.4,22.9],"svg":"<g><path d=\"M241.9 351.9 C260.7 347.3, 282.7 348.3, 335.2 349.1 M243.3 349.6 C263.4 350.3, 285.8 350.4, 337.2 349.0\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M334.8 348.4 C331.3 352.8, 329.3 353.7, 324.1 355.9 M335.0 349.2 C331.1 352.3, 328.4 353.6, 323.1 356.2\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M336.1 351.3 C334.0 347.8, 328.6 346.8, 325.3 344.7 M335.1 350.2 C333.7 349.2, 330.9 346.6, 323.5 343.3\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"water-source","to":"coagulation"},{"seq":38,"ends":[1532,355,1656,355],"r":[1524.5,343.3,139,24.3],"svg":"<g><path d=\"M1529.5 357.4 C1580.4 354.0, 1628.2 354.0, 1658.4 354.8 M1530.7 354.3 C1574.3 355.5, 1617.6 356.2, 1656.5 354.2\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1656.5 356.6 C1653.8 355.4, 1650.0 360.2, 1645.5 361.3 M1656.3 354.2 C1652.7 357.2, 1649.1 359.4, 1643.4 362.5\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1655.7 354.7 C1653.1 353.5, 1646.1 351.8, 1643.5 349.6 M1655.9 354.0 C1652.6 351.6, 1648.4 349.3, 1643.7 348.2\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"plant","to":"pipe-network"}],"texts":[{"seq":1,"r":[90,41,652.7,49],"t":[90,41,652.7,49],"txt":"水厂 · 四道工序把原水变成自来水","html":"水厂 · 四道工序把原水变成自来水","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:44px;font-weight:700;font-style:normal;line-height:49px;color:rgb(42, 37, 32);text-align:start;letter-spacing:normal;white-space:nowrap;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":44,"grp":"title"},{"seq":2,"r":[90,98,781,25],"t":[90,98,781,25],"txt":"混凝、沉淀去掉大部分杂质 · 过滤去掉细小颗粒 · 消毒杀灭细菌 · 清水池储存待送","html":"混凝、沉淀去掉大部分杂质 · 过滤去掉细小颗粒 · 消毒杀灭细菌 · 清水池储存待送","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:22px;font-weight:400;font-style:normal;line-height:25px;color:rgb(90, 84, 79);text-align:start;letter-spacing:normal;white-space:nowrap;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":22,"grp":"subtitle"},{"seq":4,"r":[60,326.5,180,25.6],"t":[129,326.5,42,24],"txt":"水源","html":"水源","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:21px;font-weight:700;font-style:normal;line-height:25.62px;color:rgb(79, 83, 89);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":21,"grp":null,"id":"water-source","node":0},{"seq":4,"r":[60,355.1,180,18.3],"t":[113.8,356.1,72.5,16],"txt":"水库 · 河流","html":"水库 · 河流","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(79, 83, 89);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"water-source","node":0},{"seq":9,"r":[318,227,230,22.7],"t":[324,228,158.7,19],"txt":"水厂 · 日处理 50 万吨","html":"水厂 · 日处理 50 万吨","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:700;font-style:normal;line-height:20.74px;color:rgb(160, 74, 31);text-align:left;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":17,"grp":"frame","id":"plant"},{"seq":11,"r":[340,330.3,190,28],"t":[412,331.3,46,25],"txt":"混凝","html":"混凝","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"coagulation","node":1},{"seq":11,"r":[340,361.4,190,18.3],"t":[383.8,362.4,102.5,16],"txt":"加药 · 凝成絮体","html":"加药 · 凝成絮体","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"coagulation","node":1},{"seq":13,"r":[580,330.3,190,28],"t":[652,331.3,46,25],"txt":"沉淀","html":"沉淀","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"sedimentation","node":2},{"seq":13,"r":[580,361.4,190,18.3],"t":[630,362.4,90,16],"txt":"絮体沉到池底","html":"絮体沉到池底","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"sedimentation","node":2},{"seq":15,"r":[820,330.3,190,28],"t":[892,331.3,46,25],"txt":"过滤","html":"过滤","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"filtration","node":3},{"seq":15,"r":[820,361.4,190,18.3],"t":[870,362.4,90,16],"txt":"砂层滤去颗粒","html":"砂层滤去颗粒","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"filtration","node":3},{"seq":17,"r":[1060,330.3,190,28],"t":[1132,331.3,46,25],"txt":"消毒","html":"消毒","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"disinfection","node":4},{"seq":17,"r":[1060,361.4,190,18.3],"t":[1110,362.4,90,16],"txt":"加氯杀灭细菌","html":"加氯杀灭细菌","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"disinfection","node":4},{"seq":19,"r":[1300,330.3,190,28],"t":[1360.5,331.3,69,25],"txt":"清水池","html":"清水池","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"clear-well","node":5},{"seq":19,"r":[1300,361.4,190,18.3],"t":[1343.8,362.4,102.5,16],"txt":"储存 · 调节水量","html":"储存 · 调节水量","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"clear-well","node":5},{"seq":33,"r":[1660,331,220,26.8],"t":[1726,331,88,25],"txt":"供水管网","html":"供水管网","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:22px;font-weight:700;font-style:normal;line-height:26.84px;color:rgb(16, 102, 104);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":22,"grp":null,"node":6},{"seq":33,"r":[1660,360.8,220,18.3],"t":[1718.8,361.8,102.5,16],"txt":"泵站 · 地下管道","html":"泵站 · 地下管道","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(16, 102, 104);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"node":6},{"seq":37,"r":[247,316,48,22.7],"t":[254,317,34,19],"txt":"原水","html":"原水","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:400;font-style:normal;line-height:20.74px;color:rgb(58, 53, 48);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":17,"grp":null},{"seq":41,"r":[1555,321,80,22.7],"t":[1569.5,322,51,19],"txt":"自来水","html":"自来水","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:400;font-style:normal;line-height:20.74px;color:rgb(58, 53, 48);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":17,"grp":null}],"images":[],"nodes":[{"shapes":[0],"texts":[2,3],"id":"water-source","parent":null,"r":[52.3,292,194.6,116]},{"shapes":[2],"texts":[5,6],"id":"coagulation","parent":"plant","r":[332.1,287.1,205.9,136]},{"shapes":[3],"texts":[7,8],"id":"sedimentation","parent":"plant","r":[572.1,287.8,205.9,135.4]},{"shapes":[4],"texts":[9,10],"id":"filtration","parent":"plant","r":[812.4,288.1,205.8,134.9]},{"shapes":[5],"texts":[11,12],"id":"disinfection","parent":"plant","r":[1052.4,287.5,205.7,134.7]},{"shapes":[6],"texts":[13,14],"id":"clear-well","parent":"plant","r":[1292.7,287.8,205.2,134.5]},{"shapes":[11],"texts":[15,16],"id":"pipe-network","parent":null,"r":[1653.4,312.4,233.9,86.5]}]}}};</script>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+const SPEC = window.DECK.spec, DATA = window.DECK.data;
+const [W, H] = SPEC.stage || [1920, 1080];
+const DIM = SPEC.dim ?? 0.13, PAD = 28, MAX_ZOOM = SPEC.maxZoom || 1.75;
+const DUR = Object.assign({ camera: 1050, morph: 1350 }, SPEC.durations || {});
+const TIMING = SPEC.timing || {};                 // { "<id>": [start, end] }: that concept moves inside this window
+
+// ---------- Geometry ----------
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1);
+const ease = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const ctr = r => [r[0] + r[2] / 2, r[1] + r[3] / 2];
+const lerp = (a, b, e) => a + (b - a) * e;
+const lerpR = (a, b, e) => [lerp(a[0], b[0], e), lerp(a[1], b[1], e), lerp(a[2], b[2], e), lerp(a[3], b[3], e)];
+const toStage = (c, r) => [c.x + r[0] * c.s, c.y + r[1] * c.s, r[2] * c.s, r[3] * c.s];
+const toLayer = (c, r) => [(r[0] - c.x) / c.s, (r[1] - c.y) / c.s, r[2] / c.s, r[3] / c.s];
+const union = rs => { const x0 = Math.min(...rs.map(r => r[0])), y0 = Math.min(...rs.map(r => r[1]));
+  return [x0, y0, Math.max(...rs.map(r => r[0] + r[2])) - x0, Math.max(...rs.map(r => r[1] + r[3])) - y0]; };
+const within = (pt, q) => pt[0] >= q[0] && pt[0] <= q[0] + q[2] && pt[1] >= q[1] && pt[1] <= q[1] + q[3];
+
+// ---------- Slides ----------
+// focus: [x, y, w, h] in canvas px, or concept ids (["plant", "pipe-network"]) → the box around them.
+function idRects(key, ids) {
+  const D = DATA[key], rs = [];
+  for (const id of ids) {
+    D.nodes.forEach(n => n.id === id && rs.push(n.r));
+    D.shapes.forEach(s => s.id === id && s.grp === 'frame' && rs.push(s.r));
+    D.texts.forEach(t => t.id === id && t.node === undefined && rs.push(t.t));
+  }
+  return rs;
+}
+const SLIDES = SPEC.slides.map((s, i) => {
+  let f = s.focus;
+  if (typeof f === 'string') f = [f];
+  if (Array.isArray(f) && typeof f[0] === 'string') {
+    const rs = idRects(s.diagram, f);
+    if (!rs.length) console.warn(`slide ${i + 1}: focus ids ${f} not found in ${s.diagram}`);
+    f = rs.length ? union(rs) : null;
+  }
+  return { d: s.diagram, focus: f || null, note: s.note || '', hold: s.hold };
+});
+SLIDES.forEach(sl => {
+  const D = DATA[sl.d], fit = Math.min(W / D.w, H / D.h);
+  if (!sl.focus) { sl.cam = { s: fit, x: (W - D.w * fit) / 2, y: (H - D.h * fit) / 2 }; return; }
+  const [x, y, w, h] = [sl.focus[0] - PAD, sl.focus[1] - PAD, sl.focus[2] + 2 * PAD, sl.focus[3] + 2 * PAD];
+  const ax = 70, ay = 50, aw = W - 2 * ax, ah = H - 2 * ay;
+  const s = Math.min(aw / w, ah / h, fit * MAX_ZOOM);
+  sl.cam = { s, x: ax + (aw - w * s) / 2 - x * s, y: ay + (ah - h * s) / 2 - y * s };
+});
+
+// ---------- Layers: one per diagram, every shape and text line is its own element ----------
+const stage = document.getElementById('stage');
+stage.style.width = W + 'px'; stage.style.height = H + 'px';
+const LAYERS = {};
+function layer(key) {
+  if (LAYERS[key]) return LAYERS[key];
+  const D = DATA[key], el = document.createElement('div');
+  el.className = 'layer'; el.style.width = D.w + 'px'; el.style.height = D.h + 'px';
+  const atoms = [];
+  D.shapes.forEach(s => {
+    const [x, y, w, h] = s.r, e = document.createElement('div');
+    e.className = 'a';
+    e.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px`;
+    const svg = inner => `<svg width="${w}" height="${h}" viewBox="${x} ${y} ${w} ${h}">${inner}</svg>`;
+    // an arrow is its line plus its head: in flight the line stretches, the head only turns and moves
+    const gs = s.grp === 'arrow' ? s.svg.match(/<g\b[\s\S]*?<\/g>/g) || [] : [];
+    e.innerHTML = gs.length > 1 ? svg(gs[0]) + svg(gs.slice(1).join('')) : svg(s.svg);
+    const [body, head] = gs.length > 1 ? e.children : [];
+    if (head) for (const g of [body, head]) g.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0';
+    el.appendChild(e);
+    atoms.push(s.atom = { el: e, R: s.r, T: s.r, base: 1, uni: false, src: s, kind: 'shape', body, head });
+  });
+  (D.images || []).forEach(m => {
+    const [x, y, w, h] = m.r, e = document.createElement('img');
+    e.className = 'a'; e.src = m.src; e.alt = '';
+    e.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px`;
+    el.appendChild(e);
+    atoms.push(m.atom = { el: e, R: m.r, T: m.r, base: m.op, uni: false, src: m, kind: 'image' });
+  });
+  D.texts.forEach(t => {
+    const [x, y, w, h] = t.r, e = document.createElement('div');
+    e.className = 'a';
+    e.style.cssText = `${t.css};position:absolute;left:${x - .5}px;top:${y}px;width:${w + 1}px;height:${h}px`;
+    e.innerHTML = t.html;
+    el.appendChild(e);
+    atoms.push(t.atom = { el: e, R: [x - .5, y, w + 1, h], T: t.t, base: t.op, uni: true, src: t, kind: 'text' });
+  });
+  stage.appendChild(el);
+  return LAYERS[key] = { el, atoms, D };
+}
+
+// Concepts of a diagram: nodes (box + its text), frames (+ label), arrows, and free text lines with an id.
+function model(key) {
+  const L = layer(key), D = L.D;
+  if (L.model) return L.model;
+  const items = [], byId = new Map(), arrows = [];
+  const add = it => { items.push(it); if (it.id) (byId.get(it.id) || byId.set(it.id, []).get(it.id)).push(it); };
+  D.nodes.forEach(n => {
+    const outer = D.shapes[n.shapes.at(-1)].atom;
+    add({ kind: 'node', id: n.id, parent: n.parent, outer, r: n.r,
+          copies: n.shapes.slice(0, -1).map(k => D.shapes[k].atom),
+          texts: n.texts.map(j => D.texts[j]).filter(t => !t.id || t.id === n.id).map(t => t.atom) });
+  });
+  D.shapes.forEach(s => {
+    if (s.grp === 'frame') add({ kind: 'frame', id: s.id, parent: s.parent, outer: s.atom, r: s.r,
+                                 copies: [], texts: s.label !== undefined ? [D.texts[s.label].atom] : [] });
+    if (s.grp === 'arrow') arrows.push({ id: s.id, from: s.from, to: s.to, atom: s.atom, ends: s.ends });
+  });
+  D.texts.forEach(t => {
+    const inNode = t.node !== undefined && (!t.id || t.id === D.nodes[t.node].id);
+    const isLabel = D.shapes.some(s => s.label !== undefined && D.texts[s.label] === t);
+    if (t.id && !inNode && !isLabel) add({ kind: 'text', id: t.id, parent: t.parent, outer: t.atom, r: t.t, copies: [], texts: [t.atom] });
+  });
+  return L.model = { items, byId, arrows };
+}
+
+// Opacity of an atom on a slide: everything outside the focus region is dimmed.
+function stateOp(sl, a) {
+  if (!sl.focus) return a.base;
+  const [fx, fy, fw, fh] = [sl.focus[0] - PAD, sl.focus[1] - PAD, sl.focus[2] + 2 * PAD, sl.focus[3] + 2 * PAD];
+  const r = a.T, [cx, cy] = ctr(r);
+  const ix = Math.max(0, Math.min(r[0] + r[2], fx + fw) - Math.max(r[0], fx));
+  const iy = Math.max(0, Math.min(r[1] + r[3], fy + fh) - Math.max(r[1], fy));
+  const inC = cx >= fx && cx <= fx + fw && cy >= fy && cy <= fy + fh;
+  const cover = (ix * iy) / Math.max(1, r[2] * r[3]);
+  return a.base * (inC && cover > .35 || cover > .6 ? 1 : DIM);
+}
+
+// Place an atom so that its anchor rect T lands on `cur` (layer coords). Text keeps its aspect;
+// al = 'l' / 'r' pins its left / right edge instead of its centre (lines sharing only a prefix / suffix).
+function place(a, cur, al) {
+  if (!cur) { a.el.style.transform = ''; return; }
+  const [ox, oy] = a.R, T = a.T;
+  let sx, sy, dx, dy;
+  if (a.uni) {
+    sx = sy = cur[3] / T[3];
+    const [cx, cy] = ctr(T), [nx, ny] = ctr(cur);
+    dx = al === 'l' ? cur[0] - ox - sx * (T[0] - ox) : al === 'r' ? cur[0] + cur[2] - ox - sx * (T[0] + T[2] - ox) : nx - ox - sx * (cx - ox);
+    dy = ny - oy - sy * (cy - oy);
+  } else {
+    sx = cur[2] / T[2]; sy = cur[3] / T[3];
+    dx = cur[0] - ox - sx * (T[0] - ox); dy = cur[1] - oy - sy * (T[1] - oy);
+  }
+  a.el.style.transform = `translate(${dx}px,${dy}px) scale(${sx},${sy})`;
+}
+// Place an arrow drawn from e1 to e2 so that it runs from p1 to p2. Its line stretches along its length only and
+// its head turns and moves without stretching; c scales both across the line (stroke width, head size).
+function placeSeg(a, e1, e2, p1, p2, c = 1) {
+  const len = Math.hypot(e2[0] - e1[0], e2[1] - e1[1]);
+  if (len < 1) return;
+  const s = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / len;
+  const B = Math.atan2(e2[1] - e1[1], e2[0] - e1[0]), A = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]);
+  const [ox, oy] = a.R;
+  const css = ([m11, m21, m12, m22], P, E) => {            // x -> P + M (x - E), in the element's own frame
+    const ux = ox - E[0], uy = oy - E[1];
+    return `matrix(${m11},${m21},${m12},${m22},${m11 * ux + m12 * uy + P[0] - ox},${m21 * ux + m22 * uy + P[1] - oy})`;
+  };
+  const [cA, sA, cB, sB] = [Math.cos(A), Math.sin(A), Math.cos(B), Math.sin(B)];
+  const line = [cA * s * cB + sA * c * sB, sA * s * cB - cA * c * sB, cA * s * sB - sA * c * cB, sA * s * sB + cA * c * cB];
+  if (!a.head) { a.el.style.transform = css(line, p1, e1); return; }
+  const th = A - B;
+  a.body.style.transform = css(line, p1, e1);
+  a.head.style.transform = css([c * Math.cos(th), c * Math.sin(th), -c * Math.sin(th), c * Math.cos(th)], p2, e2);
+}
+const setCam = (L, c) => { L.el.style.transform = `translate(${c.x}px,${c.y}px) scale(${c.s})`; };
+
+function setState(i) {
+  const sl = SLIDES[i], L = layer(sl.d);
+  for (const k in LAYERS) if (LAYERS[k] !== L) LAYERS[k].el.style.display = 'none';
+  L.el.style.display = 'block'; L.el.style.willChange = ''; L.el.style.zIndex = 1;
+  setCam(L, sl.cam);
+  for (const a of L.atoms) {
+    a.el.style.transform = ''; a.el.style.opacity = stateOp(sl, a); a.el.style.willChange = ''; a.el.style.zIndex = ''; a.el.classList.remove('gh');
+    if (a.head) a.body.style.transform = a.head.style.transform = '';
+  }
+}
+
+// ---------- Same diagram: camera move + focus change ----------
+function cameraTrans(A, B) {
+  const L = layer(A.d), ca = A.cam, cb = B.cam;
+  const va = [-ca.x / ca.s, -ca.y / ca.s, W / ca.s, H / ca.s], vb = [-cb.x / cb.s, -cb.y / cb.s, W / cb.s, H / cb.s];
+  const ops = L.atoms.map(a => [a, stateOp(A, a), stateOp(B, a)]).filter(([, x, y]) => x !== y);
+  L.el.style.willChange = 'transform';
+  return {
+    dur: DUR.camera,
+    apply(p) {
+      const e = ease(p), v = lerpR(va, vb, e), s = W / v[2];
+      setCam(L, { s, x: -v[0] * s, y: -v[1] * s });
+      const f = ease(seg(p, .1, .9));
+      for (const [a, x, y] of ops) a.el.style.opacity = lerp(x, y, f);
+    },
+  };
+}
+
+// ---------- Different diagrams: which element becomes which ----------
+// Text without an id still pairs when the line reads the same; a leading step number does not count.
+const bare = s => s.replace(/^(?:\d+\s*(?:·|\.|、|\)|）)|[①-⑳])\s*/, '').trim();
+function greedy(cands) {
+  cands.sort((p, q) => p[0] - q[0]);
+  const ua = new Set(), ub = new Set(), out = [];
+  for (const [, i, j] of cands) { if (ua.has(i) || ub.has(j)) continue; ua.add(i); ub.add(j); out.push([i, j]); }
+  return out;
+}
+// Returns pairs [atomA, atomB, kind, window], followers [atom, lead | 'region', side, window] that ride a moving
+// atom while fading, clones [source, atom, side] (an extra copy splits off / merges into source), and arrows.
+function match(A, B) {
+  const MA = model(A.d), MB = model(B.d);
+  const dist = (ra, rb) => { const p = ctr(toStage(A.cam, ra)), q = ctr(toStage(B.cam, rb)); return Math.hypot(p[0] - q[0], p[1] - q[1]); };
+  const pairs = [], follow = [], clones = [], usedA = new Set(), usedB = new Set(), pA = new Set(), pB = new Set();
+  const tw = (a, b) => TIMING[a.src.id] || TIMING[b.src.id] || TIMING[a.src.parent] || undefined;
+  const kindOf = (a, b) => !a.uni ? 'shape' : a.src.txt === b.src.txt ? 'text' : bare(a.src.txt) === bare(b.src.txt) ? 'right' : 'left';
+  const pair = (a, b, kind) => { if (usedA.has(a) || usedB.has(b)) return; pairs.push([a, b, kind || kindOf(a, b), tw(a, b)]); usedA.add(a); usedB.add(b); pA.add(a); pB.add(b); };
+  const fol = (atom, lead, side, win) => { const U = side === 'a' ? usedA : usedB; if (U.has(atom)) return; follow.push([atom, lead, side, win]); U.add(atom); };
+  const clone = (src, atom, side) => { const U = side === 'a' ? usedA : usedB; if (U.has(atom)) return; clones.push([src, atom, side]); U.add(atom); (side === 'a' ? pA : pB).add(atom); };
+  const OUT = [0, .3], IN = [.58, 1];
+  const winOf = side => side === 'a' ? OUT : IN;
+  const done = new Set();                                // items already matched as a whole
+
+  // text lines of two matched concepts: identical lines fly, the two headings cross-fade in place, the rest fade
+  function pairLines(ta0, tb0, leadA, leadB) {
+    const ta = ta0.filter(a => !usedA.has(a)), tb = tb0.filter(b => !usedB.has(b));
+    greedy(ta.flatMap((a, i) => tb.map((b, j) => bare(a.src.txt) === bare(b.src.txt) ? [dist(a.T, b.T), i, j] : null).filter(Boolean)))
+      .forEach(([i, j]) => pair(ta[i], tb[j]));
+    const [ha] = ta0, [hb] = tb0;                        // the headings of the two forms
+    if (ha && hb && !usedA.has(ha) && !usedB.has(hb)) pair(ha, hb, 'left');
+    ta.forEach(a => fol(a, leadA, 'a', OUT));
+    tb.forEach(b => fol(b, leadB, 'b', IN));
+  }
+  function pairItems(x, y) {
+    done.add(x); done.add(y);
+    if (x.kind === 'text' && y.kind !== 'text') {        // a line here is a whole box there: the box grows around it
+      const head = y.texts[0];
+      if (head) { pair(x.outer, head); [y.outer, ...y.copies, ...y.texts.slice(1)].forEach(b => fol(b, head, 'b', [.3, .85])); }
+      else pair(x.outer, y.outer, 'shape');
+      return;
+    }
+    if (y.kind === 'text' && x.kind !== 'text') {
+      const head = x.texts[0];
+      if (head) { pair(head, y.outer); [x.outer, ...x.copies, ...x.texts.slice(1)].forEach(a => fol(a, head, 'a', [.1, .6])); }
+      else pair(x.outer, y.outer, 'shape');
+      return;
+    }
+    if (x.kind === 'text') { pair(x.outer, y.outer); return; }
+    pair(x.outer, y.outer, 'shape');
+    const n = Math.min(x.copies.length, y.copies.length);
+    for (let k = 0; k < n; k++) pair(x.copies.at(-1 - k), y.copies.at(-1 - k), 'shape');
+    x.copies.slice(0, x.copies.length - n).forEach(a => fol(a, x.outer, 'a', OUT));
+    y.copies.slice(0, y.copies.length - n).forEach(b => fol(b, y.outer, 'b', IN));
+    pairLines(x.texts, y.texts, x.outer, y.outer);
+  }
+
+  // 1. same id on both sides; extra copies on one side split off (or merge into) their partner
+  for (const [id, la0] of MA.byId) {
+    const lb0 = MB.byId.get(id);
+    if (!lb0) continue;
+    const la = la0.filter(x => !done.has(x)), lb = lb0.filter(y => !done.has(y));
+    const m = greedy(la.flatMap((x, i) => lb.map((y, j) => [dist(x.r, y.r), i, j])));
+    m.forEach(([i, j]) => pairItems(la[i], lb[j]));
+    const mp = m.map(([i, j]) => [la[i], lb[j]]);
+    const gap = (r, q) => Math.hypot(ctr(r)[0] - ctr(q)[0], ctr(r)[1] - ctr(q)[1]);
+    const nearest = (it, k) => mp.reduce((best, pr) => !best || gap(pr[k].r, it.r) < gap(best[k].r, it.r) ? pr : best, null);
+    lb.filter(y => !done.has(y)).forEach(y => { const [x] = nearest(y, 1); done.add(y); clone(x.outer, y.outer, 'b');
+      [...y.copies, ...y.texts].forEach(b => fol(b, y.outer, 'b', [.4, .9])); });
+    la.filter(x => !done.has(x)).forEach(x => { const [, y] = nearest(x, 0); done.add(x); clone(y.outer, x.outer, 'a');
+      [...x.copies, ...x.texts].forEach(a => fol(a, x.outer, 'a', [.2, .6])); });
+  }
+
+  // 2. a concept with no partner but a declared parent: it lives inside the parent here,
+  //    or it splits off the parent drawn on the other side (and merges back on the way there)
+  const adopt = (M, O, side) => M.items.forEach(it => {
+    if (done.has(it) || !it.parent) return;
+    const own = (M.byId.get(it.parent) || []).find(p => (side === 'a' ? pA : pB).has(p.outer));
+    const other = (O.byId.get(it.parent) || [])[0];
+    if (own) { done.add(it); [it.outer, ...it.copies, ...it.texts].forEach(a => fol(a, own.outer, side, side === 'a' ? [.05, .5] : [.35, .9])); }
+    else if (other) { done.add(it); clone(other.outer, it.outer, side); [...it.copies, ...it.texts].forEach(a => fol(a, it.outer, side, side === 'a' ? [.2, .6] : [.4, .9])); }
+  });
+  adopt(MA, MB, 'a'); adopt(MB, MA, 'b');
+
+  // 3. no ids: the same text line on both sides (legend only pairs with legend; titles with titles)
+  const LA = layer(A.d), LB = layer(B.d);
+  const freeT = (Lr, U) => Lr.atoms.filter(a => a.kind === 'text' && !U.has(a));
+  const ta = freeT(LA, usedA), tb = freeT(LB, usedB);
+  const grpOf = a => a.src.grp === 'legend' ? 'legend' : a.src.grp === 'title' || a.src.grp === 'subtitle' ? 'title' : '';
+  greedy(ta.flatMap((a, i) => tb.map((b, j) => bare(a.src.txt) === bare(b.src.txt) && grpOf(a) === grpOf(b) ? [dist(a.T, b.T), i, j] : null).filter(Boolean)))
+    .forEach(([i, j]) => pair(ta[i], tb[j]));
+  // ... and the same picture
+  const ia = LA.atoms.filter(a => a.kind === 'image' && !usedA.has(a)), ib = LB.atoms.filter(b => b.kind === 'image' && !usedB.has(b));
+  greedy(ia.flatMap((a, i) => ib.map((b, j) => a.src.src === b.src.src ? [dist(a.T, b.T), i, j] : null).filter(Boolean)))
+    .forEach(([i, j]) => pair(ia[i], ib[j], 'shape'));
+
+  // 4. a concept that only shares a text line: its box and other lines grow / shrink around that line
+  const ride = (M, P, side, win) => M.items.forEach(it => {
+    if (done.has(it)) return;
+    const lead = it.texts.find(a => P.has(a));
+    if (lead) { done.add(it); [it.outer, ...it.copies, ...it.texts].forEach(a => a !== lead && fol(a, lead, side, win)); }
+  });
+  ride(MA, pA, 'a', [.15, .6]); ride(MB, pB, 'b', [.35, .85]);
+
+  // 5. arrows: same id, else the same two concepts (an end may sit on a part of the concept the other side
+  //    shows whole: source → plant ≈ source → first step inside the plant); every arrow keeps its ends on its concepts
+  const parentOf = new Map();
+  for (const M of [MA, MB]) M.items.forEach(it => it.id && it.parent && !parentOf.has(it.id) && parentOf.set(it.id, it.parent));
+  const chain = id => { const out = []; for (let k = id, n = 0; k && n < 20; k = parentOf.get(k), n++) out.push(k); return out; };
+  const endCost = (a, b) => !a || !b ? -1 : a === b ? 0 : chain(b).includes(a) || chain(a).includes(b) ? 1 : -1;
+  const arrows = [];
+  const fa = MA.arrows.filter(r => !usedA.has(r.atom)), fb = MB.arrows.filter(r => !usedB.has(r.atom));
+  const mate = new Map();
+  greedy(fa.flatMap((x, i) => fb.map((y, j) => {
+    if (x.id && y.id) return x.id === y.id ? [dist(x.atom.T, y.atom.T), i, j] : null;
+    const c1 = endCost(x.from, y.from), c2 = endCost(x.to, y.to);
+    return c1 < 0 || c2 < 0 ? null : [(c1 + c2) * 1e5 + dist(x.atom.T, y.atom.T), i, j];
+  }).filter(Boolean))).forEach(([i, j]) => mate.set(fa[i], fb[j]));
+  fa.forEach(r => { usedA.add(r.atom); arrows.push({ r, side: 'a', mate: mate.get(r) || null }); });
+  const mated = new Set(mate.values());
+  fb.forEach(r => { usedB.add(r.atom); arrows.push({ r, side: 'b', mate: mated.has(r) ? r : null }); });
+
+  // 6. details only one side shows: they grow out of (or shrink into) the smallest moving shape around them;
+  //    with no such shape, they ride the region both slides describe (zoom in / out)
+  const settle = (Lr, P, U, side, win, winR) => {
+    const boxes = Lr.atoms.filter(a => a.kind === 'shape' && P.has(a));
+    for (const a of Lr.atoms) {
+      if (U.has(a)) continue;
+      const c = ctr(a.T), area = a.T[2] * a.T[3];
+      let best = null;
+      for (const b of boxes) {
+        const q = b.T;
+        if (b !== a && q[2] * q[3] > area * 1.2 && within(c, q) && (!best || q[2] * q[3] < best.T[2] * best.T[3])) best = b;
+      }
+      fol(a, best || 'region', side, best ? win : winR);
+    }
+  };
+  settle(LA, pA, usedA, 'a', [.05, .5], [0, .45]);
+  settle(LB, pB, usedB, 'b', [.35, .9], [.4, 1]);
+  return { pairs, follow, clones, arrows, MA, MB };
+}
+
+// The part of each canvas both slides talk about: the box around the concepts they share (moved, split or
+// merged). With too little in common to tell, the focus region or the whole canvas.
+function regionOf(sl, atoms) {
+  const D = DATA[sl.d], full = sl.focus || [0, 0, D.w, D.h];
+  if (atoms.length < 2) return full;
+  const u = union(atoms.map(a => a.T));
+  return u[2] * u[3] < .03 * D.w * D.h ? full : u;
+}
+
+const hasBg = a => a.uni && /background:/.test(a.src.css) && !/background:\s*(rgba\(0, 0, 0, 0\)|transparent)/.test(a.src.css);
+function magicTrans(A, B) {
+  const LA = layer(A.d), LB = layer(B.d);
+  setCam(LA, A.cam); setCam(LB, B.cam);
+  LA.el.style.display = LB.el.style.display = 'block';
+  LA.el.style.zIndex = 1; LB.el.style.zIndex = 2;
+  const { pairs, follow, clones, arrows, MA, MB } = match(A, B);
+  const moved = new Set(), tracks = [], leads = new Map();
+  const track = (a, b, kind, tw) => {
+    const al = kind === 'left' ? 'l' : kind === 'right' ? 'r' : null;
+    const ta = { atom: a, from: a.T, to: toLayer(A.cam, toStage(B.cam, b.T)), al, tw };
+    const tb = { atom: b, from: toLayer(B.cam, toStage(A.cam, a.T)), to: b.T, al, tw };
+    // identical text: the incoming copy takes over early and the pair keeps a constant combined opacity;
+    // shapes and differing lines: a plain cross-fade while they overlap mid-flight
+    // a label on a paper patch (frame titles) only takes over at the end, so no patch flies over the boxes
+    const bgA = hasBg(a), bgB = hasBg(b);
+    const win = kind === 'text' ? (bgB && !bgA ? [.6, .95] : [.05, .45]) : al ? (bgB && !bgA ? [.55, .9] : bgA && !bgB ? [.1, .45] : [.3, .7]) : [.2, .65];
+    tracks.push({ ta, tb, kind, oA: stateOp(A, a), oB: stateOp(B, b), win });
+    leads.set(a, ta); leads.set(b, tb); moved.add(a); moved.add(b);
+  };
+  for (const [a, b, kind, tw] of pairs) track(a, b, kind, tw);
+  // copies that split off one box come out of their own part of it, already laid out as they will land
+  const part = new Map();
+  for (const [src, atom, side] of clones) {
+    const sib = clones.filter(c => c[0] === src && c[2] === side).map(c => c[1]);
+    const U = union(sib.map(a => a.T)), S = src.T, r = atom.T;
+    part.set(atom, sib.length < 2 ? S : [S[0] + (r[0] - U[0]) / U[2] * S[2], S[1] + (r[1] - U[1]) / U[3] * S[3], r[2] / U[2] * S[2], r[3] / U[3] * S[3]]);
+  }
+  const solo = clones.map(([src, atom, side]) => {
+    const t = side === 'b'
+      ? { atom, from: toLayer(B.cam, toStage(A.cam, part.get(atom))), to: atom.T, o0: 0, o1: stateOp(B, atom), win: [.15, .6] }
+      : { atom, from: atom.T, to: toLayer(A.cam, toStage(B.cam, part.get(atom))), o0: stateOp(A, atom), o1: 0, win: [.35, .8] };
+    leads.set(atom, t); moved.add(atom);
+    return t;
+  });
+  const shared = side => [...pairs.map(p => p[side === 'a' ? 0 : 1]), ...clones.filter(c => c[2] === side).map(c => c[1]),
+                           ...clones.filter(c => c[2] !== side).map(c => c[0])].filter(a => !a.uni);
+  const RA = regionOf(A, shared('a')), RB = regionOf(B, shared('b'));
+  const region = {
+    a: { from: RA, to: toLayer(A.cam, toStage(B.cam, RB)), atom: { T: RA } },
+    b: { from: toLayer(B.cam, toStage(A.cam, RA)), to: RB, atom: { T: RB } },
+  };
+  const at = (t, p) => t.rect ? t.rect(p) : lerpR(t.from, t.to, t.tw ? ease(seg(p, t.tw[0], t.tw[1])) : ease(p));
+  const followers = follow.map(([f, lead, side, win]) => {
+    moved.add(f);
+    const L = lead === 'region' ? region[side] : leads.get(lead), T = L.atom.T;
+    const fl = { atom: f, side, win, o: side === 'a' ? stateOp(A, f) : stateOp(B, f) };
+    fl.rect = p => {                                     // keep its place inside the lead, scale uniformly
+      const c = at(L, p), sx = c[2] / T[2], sy = c[3] / T[3], s = Math.sqrt(sx * sy);
+      const [fx, fy] = ctr(f.T), nx = c[0] + (fx - T[0]) * sx, ny = c[1] + (fy - T[1]) * sy;
+      const w = f.T[2] * s, h = f.T[3] * s;
+      return [nx - w / 2, ny - h / 2, w, h];
+    };
+    leads.set(f, fl);
+    return fl;
+  });
+  // arrow ends ride the concept they touch (wherever its box is going), else the region
+  const anchorOf = (M, id, side) => {
+    const it = id && (M.byId.get(id) || []).find(x => leads.has(x.outer));
+    return it ? leads.get(it.outer) : region[side];
+  };
+  const wires = arrows.map(({ r, side, mate }) => {
+    const M = side === 'a' ? MA : MB, sl = side === 'a' ? A : B;
+    moved.add(r.atom);
+    const e1 = [r.ends[0], r.ends[1]], e2 = [r.ends[2], r.ends[3]];
+    const k1 = anchorOf(M, r.from, side), k2 = anchorOf(M, r.to, side);
+    const rel = (k, e) => [(e[0] - k.atom.T[0]) / k.atom.T[2], (e[1] - k.atom.T[1]) / k.atom.T[3]];
+    const o = stateOp(sl, r.atom);
+    return { atom: r.atom, r, mate, e1, e2, k1, k2, u1: rel(k1, e1), u2: rel(k2, e2), side, cam: sl.cam, o,
+             o0: side === 'a' ? o : 0, o1: side === 'a' ? 0 : o, win: side === 'a' ? [0, .35] : [.55, 1] };
+  });
+  // a matched pair runs along one shared line (from where the old one starts to where the new one ends),
+  // the new arrow drawn over the old one: two arrows never show side by side
+  const wireOf = new Map(wires.filter(w => w.side === 'b').map(w => [w.r, w]));
+  for (const w of wires) if (w.side === 'a' && w.mate) { w.partner = wireOf.get(w.mate); w.partner.partner = w; }
+  const ptS = (c, q) => [c.x + q[0] * c.s, c.y + q[1] * c.s], ptL = (c, q) => [(q[0] - c.x) / c.s, (q[1] - c.y) / c.s];
+  const ends = (w, p) => { const c1 = at(w.k1, p), c2 = at(w.k2, p);
+    return [ptS(w.cam, [c1[0] + w.u1[0] * c1[2], c1[1] + w.u1[1] * c1[3]]), ptS(w.cam, [c2[0] + w.u2[0] * c2[2], c2[1] + w.u2[1] * c2[3]])]; };
+  const still = [
+    ...LA.atoms.filter(a => !moved.has(a)).map(a => ({ atom: a, o0: stateOp(A, a), o1: 0, win: [0, .4] })),
+    ...LB.atoms.filter(a => !moved.has(a)).map(a => ({ atom: a, o0: 0, o1: stateOp(B, a), win: [.52, 1] })),
+  ];
+  // while things fly past each other, smaller shapes stay on top of bigger ones and text on top of shapes
+  for (const L of [LA, LB]) {
+    L.atoms.filter(a => !a.uni).sort((p, q) => q.T[2] * q.T[3] - p.T[2] * p.T[3]).forEach((a, i) => { a.el.style.zIndex = i + 1; });
+    L.atoms.filter(a => a.uni).forEach(a => { a.el.style.zIndex = 9999; });
+  }
+  for (const a of moved) a.el.style.willChange = 'transform, opacity';
+  for (const k of tracks) if (k.ta.atom.uni) { k.ta.atom.el.classList.add('gh'); k.tb.atom.el.classList.add('gh'); }
+  for (const a of LB.atoms) a.el.style.opacity = 0;
+  return {
+    dur: DUR.morph, tracks, wires,
+    apply(p) {
+      const lvl = ease(seg(p, .1, .9));
+      for (const k of tracks) {
+        place(k.ta.atom, at(k.ta, p), k.ta.al);
+        place(k.tb.atom, at(k.tb, p), k.tb.al);
+        const L = lerp(k.oA, k.oB, lvl), x = ease(seg(p, k.win[0], k.win[1]));
+        let oa = L * (1 - x), ob = L * x;
+        if (k.kind === 'text') oa = ob >= .999 ? 0 : (L - ob) / (1 - ob);   // over-the-top: top + bottom·(1−top) = L
+        k.ta.atom.el.style.opacity = oa; k.tb.atom.el.style.opacity = ob;
+      }
+      for (const t of solo) {
+        place(t.atom, at(t, p));
+        t.atom.el.style.opacity = lerp(t.o0, t.o1, ease(seg(p, t.win[0], t.win[1])));
+      }
+      for (const f of followers) {
+        place(f.atom, f.rect(p));
+        const q = ease(seg(p, f.win[0], f.win[1]));
+        f.atom.el.style.opacity = f.o * (f.side === 'a' ? 1 - q : q);
+      }
+      const e = ease(p), scr = Math.pow(A.cam.s, 1 - e) * Math.pow(B.cam.s, e);   // on-screen scale of a stroke
+      const at1 = new Map(wires.map(w => [w, ends(w, p)]));
+      for (const w of wires) {
+        let [q1, q2] = at1.get(w);
+        if (w.partner) {
+          const [a1, a2] = at1.get(w.side === 'a' ? w : w.partner), [b1, b2] = at1.get(w.side === 'a' ? w.partner : w);
+          q1 = [lerp(a1[0], b1[0], e), lerp(a1[1], b1[1], e)]; q2 = [lerp(a2[0], b2[0], e), lerp(a2[1], b2[1], e)];
+        }
+        placeSeg(w.atom, w.e1, w.e2, ptL(w.cam, q1), ptL(w.cam, q2), scr / w.cam.s);
+        if (!w.partner) { w.atom.el.style.opacity = lerp(w.o0, w.o1, ease(seg(p, w.win[0], w.win[1]))); continue; }
+        if (w.side === 'b') continue;
+        const L = lerp(w.o, w.partner.o, lvl), ob = L * ease(seg(p, .3, .7));
+        w.partner.atom.el.style.opacity = ob;
+        w.atom.el.style.opacity = ob >= .999 ? 0 : (L - ob) / (1 - ob);            // together they keep level L
+      }
+      for (const s of still) s.atom.el.style.opacity = lerp(s.o0, s.o1, ease(seg(p, s.win[0], s.win[1])));
+    },
+    done() { for (const L of [LA, LB]) for (const a of L.atoms) a.el.classList.remove('gh'); },
+  };
+}
+
+// ---------- Driver ----------
+let cur = 0, tr = null;
+function makeTrans(i, j) {
+  const A = SLIDES[i], B = SLIDES[j];
+  return Object.assign(A.d === B.d ? cameraTrans(A, B) : magicTrans(A, B), { i, j });
+}
+function finish() { if (!tr) return; tr.apply(1); if (tr.done) tr.done(); setState(tr.j); tr = null; }
+function go(j) {
+  j = clamp(j, 0, SLIDES.length - 1);
+  if (tr) finish();
+  if (j === cur) return;
+  const i = cur; cur = j;
+  history.replaceState(null, '', '#' + (j + 1));
+  const t = tr = makeTrans(i, j);
+  const t0 = performance.now();
+  const tick = now => {
+    if (tr !== t) return;
+    const p = Math.min(1, (now - t0) / t.dur);
+    t.apply(p);
+    if (p < 1) requestAnimationFrame(tick); else finish();
+  };
+  requestAnimationFrame(tick);
+}
+function fitStage() {
+  const s = Math.min(innerWidth / W, innerHeight / H);
+  stage.style.transform = `translate(${(innerWidth - W * s) / 2}px,${(innerHeight - H * s) / 2}px) scale(${s})`;
+}
+addEventListener('resize', fitStage);
+addEventListener('keydown', e => {
+  if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(e.key)) { e.preventDefault(); go(cur + 1); }
+  else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(e.key)) { e.preventDefault(); go(cur - 1); }
+  else if (e.key === 'Home') go(0);
+  else if (e.key === 'End') go(SLIDES.length - 1);
+  else if (e.key === 'f' || e.key === 'F') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+});
+addEventListener('click', e => go(e.clientX < innerWidth * .2 ? cur - 1 : cur + 1));
+
+// ---------- Hooks for deck/check.py and deck/record.py ----------
+// freeze(i, j, p): show transition i → j at progress p (p = 1 ends it); repeated calls reuse one transition.
+// Returns the transition's duration in ms, so a recording keeps the on-screen timing.
+const visible = (sl, a) => {                     // fully shown on this slide and on screen
+  if (stateOp(sl, a) < .9 * a.base || a.base < .5) return false;
+  const r = toStage(sl.cam, a.T), c = ctr(r);
+  return c[0] > 0 && c[0] < W && c[1] > 0 && c[1] < H;
+};
+window.__deck = {
+  SLIDES, go, setState, W, H,
+  freeze(i, j, p) {
+    if (!(tr && tr.i === i && tr.j === j)) { finish(); cur = i; setState(i); tr = makeTrans(i, j); }
+    const dur = tr.dur; tr.apply(p); if (p >= 1) { finish(); cur = j; }
+    return dur;
+  },
+  // What a transition between two different diagrams does with each concept.
+  inspect(i, j) {
+    const A = SLIDES[i], B = SLIDES[j];
+    if (A.d === B.d) return { camera: true };
+    const m = match(A, B), pa = new Set(m.pairs.map(p => p[0])), pb = new Set(m.pairs.map(p => p[1]));
+    const ca = new Set(m.clones.filter(c => c[2] === 'a').map(c => c[1])), cb = new Set(m.clones.filter(c => c[2] === 'b').map(c => c[1]));
+    const fa = new Map(m.follow.filter(f => f[2] === 'a').map(f => [f[0], f[1]])), fb = new Map(m.follow.filter(f => f[2] === 'b').map(f => [f[0], f[1]]));
+    const movesA = x => pa.has(x.outer) || ca.has(x.outer) || (fa.has(x.outer) && fa.get(x.outer) !== 'region' && x.kind !== 'text');
+    const movesB = y => pb.has(y.outer) || cb.has(y.outer) || (fb.has(y.outer) && fb.get(y.outer) !== 'region' && y.kind !== 'text');
+    const shown = (sl, M, id) => (M.byId.get(id) || []).some(x => visible(sl, x.outer));
+    const both = [...m.MA.byId.keys()].filter(id => m.MB.byId.has(id) && (shown(A, m.MA, id) || shown(B, m.MB, id)));
+    const lost = both.filter(id => !(m.MA.byId.get(id).some(movesA) && m.MB.byId.get(id).some(movesB)));
+    const LA = layer(A.d), LB = layer(B.d);
+    const gone = LA.atoms.filter(a => a.kind === 'text' && !pa.has(a) && !ca.has(a) && visible(A, a));
+    const born = LB.atoms.filter(b => b.kind === 'text' && !pb.has(b) && !cb.has(b) && visible(B, b));
+    const bornTxt = new Set(born.map(b => bare(b.src.txt)));
+    const reappear = [...new Set(gone.filter(a => a.src.grp !== 'legend' && bornTxt.has(bare(a.src.txt))).map(a => a.src.txt))];
+    return { camera: false, sharedIds: both, lostIds: lost, reappearingText: reappear,
+             morphedArrows: m.arrows.filter(w => w.side === 'a' && w.mate).length,
+             pairedTexts: [...pa].filter(a => a.kind === 'text').length, newTexts: born.length, goneTexts: gone.length };
+  },
+  // Readability of a resting slide: smallest on-screen font size among the lines it shows, and how much is new.
+  stats(i) {
+    const sl = SLIDES[i], L = layer(sl.d);
+    const shown = L.atoms.filter(a => a.kind === 'text' && visible(sl, a));
+    const px = a => +(a.src.fs * sl.cam.s).toFixed(1);
+    // lines to read: new ones, and ones the camera just moved onto (an overview line only got a glance)
+    let fresh = shown.length;
+    if (i > 0) {
+      const P = SLIDES[i - 1];
+      if (P.d === sl.d) fresh = shown.filter(a => !(P.focus && visible(P, a))).length;
+      else { const m = match(P, sl), pb = new Map(m.pairs.map(p => [p[1], p[0]]));
+             fresh = shown.filter(b => !(pb.has(b) && visible(P, pb.get(b)))).length; }
+    }
+    const small = shown.filter(a => px(a) < (SPEC.minFontPx || 12)).map(a => [a.src.txt.slice(0, 40), px(a)]);
+    return { lines: shown.length, newLines: fresh, minPx: shown.length ? Math.min(...shown.map(px)) : null, small };
+  },
+  // On-screen boxes of the text lines currently visible (stage px), tagged with their transition partner.
+  textBoxes() {
+    const s = stage.getBoundingClientRect(), k = s.width / W, out = [];
+    const partner = new Map();
+    if (tr && tr.tracks) tr.tracks.forEach((t, n) => { partner.set(t.ta.atom, n); partner.set(t.tb.atom, n); });
+    for (const key in LAYERS) {
+      const L = LAYERS[key];
+      if (L.el.style.display === 'none') continue;
+      for (const a of L.atoms) {
+        if (a.kind !== 'text') continue;
+        const o = +a.el.style.opacity;
+        if (!(o > .35)) continue;
+        // the element may be as wide as its box (centred labels); map the glyphs' own box through its transform
+        const r = a.el.getBoundingClientRect(), sx = r.width / a.R[2], sy = r.height / a.R[3];
+        const g = [r.left + (a.T[0] - a.R[0]) * sx, r.top + (a.T[1] - a.R[1]) * sy, a.T[2] * sx, a.T[3] * sy];
+        out.push({ key: key + ':' + L.atoms.indexOf(a), txt: a.src.txt.slice(0, 40), op: o, pair: partner.has(a) ? partner.get(a) : null,
+                   r: [(g[0] - s.left) / k, (g[1] - s.top) / k, g[2] / k, g[3] / k] });
+      }
+    }
+    return out;
+  },
+};
+
+fitStage();
+cur = clamp((parseInt(location.hash.slice(1), 10) || 1) - 1, 0, SLIDES.length - 1);
+document.fonts.ready.then(() => { setState(cur); window.__ready = true; });
+</script>
+</body>
+</html>

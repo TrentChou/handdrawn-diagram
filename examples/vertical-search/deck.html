@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>垂直搜索引擎 · 动态讲解</title>
+<!--
+  Animated deck player for hand-drawn diagrams. deck/build.py inlines the diagram data below and writes one
+  offline file. Every slide is one diagram seen through a camera (whole canvas, or a focus region with the rest
+  dimmed). Between slides of the same diagram the camera moves; between different diagrams the elements morph:
+  a concept present on both sides (same motion id, or failing that the same text) moves and reshapes into its
+  new form, details only one side has grow out of / shrink back into their parent, arrows stay attached to the
+  concepts they connect. Keys: → / space / Enter next, ← back, Home / End, F fullscreen; #N in the URL opens slide N.
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: #fdfdfa; overflow: hidden; cursor: default; }
+  #stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden; background: #fdfdfa; }
+  .layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; display: none; }
+  .a { position: absolute; transform-origin: 0 0; box-sizing: border-box; margin: 0; }
+  .a svg { display: block; overflow: visible; }
+  img.a { display: block; }
+  .ti { font-family: 'Times New Roman', Times, 'STZhongsong', '华文中宋', 'Songti SC', 'SimSun', '宋体', 'Noto Serif SC', serif; font-weight: 700; }
+  .bd { font-family: 'Times New Roman', Times, 'Songti SC', 'STSong', 'SimSun', '宋体', 'Noto Serif SC', serif; font-weight: 400; }
+  /* text in flight keeps a paper-coloured halo, so the lines it crosses do not cut through it */
+  .gh { text-shadow: 0 0 2px #fdfdfa, 0 0 6px #fdfdfa, 0 0 12px #fdfdfa; }
+</style>
+<script>window.DECK = {"spec":{"title":"垂直搜索引擎 · 动态讲解","slides":[{"diagram":"overview","note":"两条链路：离线建库写索引，在线检索读索引"},{"diagram":"overview","focus":["user","online-search"],"note":"用户的一次搜索只走在线链路"},{"diagram":"online","note":"在线检索展开成四个阶段"},{"diagram":"online","focus":["query-understanding","recall","ranking","assembly"],"note":"理解 → 召回 → 排序 → 组装，毫秒级完成"},{"diagram":"online","focus":["embedding-model","inverted-index","vector-store","ranking-model","forward-store"],"note":"每个阶段各自读模型或索引"},{"diagram":"overview","note":"回到全局：索引是两条链路的交汇点"},{"diagram":"overview","focus":["data-sources","offline-build","index-store"],"note":"离线链路负责把数据变成索引"},{"diagram":"offline","note":"离线建库展开成四道工序"},{"diagram":"offline","focus":["url-queue","crawler","parser"],"note":"解析出的新链接回到抓取队列"},{"diagram":"offline","focus":["inverted-index","forward-store","vector-store"],"note":"建库后写入三类存储"},{"diagram":"overview","note":"两条链路通过索引存储解耦"}]},"data":{"overview":{"w":1260,"h":780,"shapes":[{"seq":3,"ends":null,"r":[84.1,211.4,253.6,134.5],"svg":"<g><path d=\"M89.4 220.6 L332.7 222.5 L332.4 339.2 L91.5 340.0\" stroke=\"none\" stroke-width=\"0\" fill=\"#e3ebf2\"><\/path><path d=\"M89.5 220.0 C157.4 214.2, 228.1 216.4, 330.7 219.3 M89.8 220.0 C153.4 217.4, 215.5 216.1, 330.1 219.4 M328.8 219.2 C328.2 265.8, 330.1 311.9, 327.6 337.9 M328.6 218.7 C331.8 265.5, 332.0 310.1, 330.6 340.8 M327.7 339.3 C258.6 336.5, 185.5 336.2, 89.1 339.2 M330.2 338.8 C237.9 338.6, 146.1 339.6, 90.4 339.0 M91.8 340.7 C89.3 294.8, 90.1 251.1, 89.8 222.9 M91.2 340.8 C90.7 297.1, 89.5 255.1, 90.3 218.9\" stroke=\"#1f5582\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"user","node":0},{"seq":5,"ends":null,"r":[492.4,184.3,533.9,193.6],"svg":"<g><path d=\"M499.0 189.6 L1018.3 190.9 L1021.0 372.9 L497.3 367.7\" stroke=\"none\" stroke-width=\"0\" fill=\"#f3e2cf\"><\/path><path d=\"M501.1 189.9 C652.3 190.0, 805.9 188.6, 1020.1 189.6 M500.4 189.8 C607.9 192.9, 717.4 193.1, 1020.0 189.6 M1021.2 192.3 C1017.5 251.9, 1015.4 312.3, 1019.0 371.0 M1019.3 191.3 C1015.9 242.0, 1017.7 295.4, 1020.9 370.5 M1018.7 369.1 C894.7 369.2, 769.5 367.9, 499.7 370.4 M1020.1 369.6 C824.1 370.3, 627.4 369.6, 499.9 370.5 M499.1 368.2 C498.5 310.4, 496.1 253.3, 502.0 193.1 M500.3 370.5 C501.3 306.3, 503.3 242.6, 499.7 191.1\" stroke=\"#a04a1f\" stroke-width=\"3\" fill=\"none\"><\/path><\/g>","grp":null,"id":"online-search","node":1},{"seq":7,"ends":null,"r":[83.3,573.3,254.5,134.3],"svg":"<g><path d=\"M88.3 583.0 L332.5 578.3 L328.8 699.5 L92.2 702.6\" stroke=\"none\" stroke-width=\"0\" fill=\"#e9e7e3\"><\/path><path d=\"M88.3 580.9 C165.2 585.3, 238.1 585.5, 331.2 581.5 M88.9 579.0 C162.8 581.3, 234.3 583.3, 329.7 579.4 M332.7 579.3 C333.3 606.7, 330.0 633.7, 329.8 700.0 M329.4 580.9 C332.3 616.2, 331.2 653.9, 329.5 699.2 M332.5 697.4 C244.5 698.2, 162.0 696.4, 92.5 701.3 M328.7 700.6 C255.3 695.3, 180.0 695.8, 90.6 700.7 M88.4 702.4 C91.2 654.8, 88.1 611.7, 93.1 582.2 M90.4 701.5 C91.3 653.7, 90.9 604.9, 90.6 580.9\" stroke=\"#4f5359\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"data-sources","node":2},{"seq":9,"ends":null,"r":[462.6,562.9,295.6,155.8],"svg":"<g><path d=\"M467.9 571.8 L750.8 569.5 L751.1 711.6 L468.5 711.0\" stroke=\"none\" stroke-width=\"0\" fill=\"#f4eacd\"><\/path><path d=\"M470.3 571.6 C539.7 570.2, 610.8 569.8, 751.9 571.6 M469.0 569.2 C535.1 567.5, 599.2 566.7, 749.0 571.0 M748.3 569.4 C746.0 624.2, 748.7 679.7, 753.1 712.2 M750.1 570.9 C751.3 602.3, 750.8 636.7, 751.2 708.4 M750.9 710.5 C673.9 711.3, 598.5 708.7, 467.5 709.3 M750.2 708.8 C667.8 714.6, 587.6 715.2, 468.9 710.7 M468.2 707.9 C472.5 653.0, 468.6 603.9, 471.1 568.2 M468.9 708.6 C472.2 655.6, 471.5 603.0, 469.8 571.5\" stroke=\"#7d4f0a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"offline-build","node":3},{"seq":11,"ends":null,"r":[892.7,562.7,314.6,154.7],"svg":"<g><path d=\"M897.6 569.8 L1197.0 571.6 L1198.9 712.3 L898.8 710.0\" stroke=\"none\" stroke-width=\"0\" fill=\"#ede2d5\"><\/path><path d=\"M899.1 571.2 C986.1 570.5, 1069.9 566.4, 1200.0 568.0 M900.8 569.1 C987.5 572.1, 1076.8 572.3, 1199.4 570.6 M1199.9 571.5 C1198.4 603.4, 1195.0 640.0, 1200.1 712.1 M1199.3 570.1 C1197.9 617.7, 1198.6 663.8, 1200.2 710.1 M1202.3 711.6 C1132.7 704.5, 1064.7 705.1, 900.5 709.0 M1199.7 711.0 C1086.3 709.8, 972.0 711.1, 900.9 709.4 M902.8 709.7 C901.4 678.9, 904.4 651.3, 900.2 571.7 M900.4 708.9 C897.5 657.8, 898.9 606.1, 899.9 568.9\" stroke=\"#6e554a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"index-store","node":4},{"seq":13,"ends":[330,262,498,262],"r":[323.9,248.4,180.8,25.4],"svg":"<g><path d=\"M330.3 261.6 C366.6 264.1, 407.1 261.6, 497.2 260.1 M328.8 263.3 C373.1 262.0, 414.5 262.0, 497.8 261.0\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M497.9 260.2 C494.3 262.6, 492.8 266.5, 484.6 268.7 M498.4 262.1 C493.7 263.6, 489.8 265.0, 486.5 268.1\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M499.7 262.5 C493.0 260.2, 490.4 257.5, 484.5 253.3 M498.6 261.7 C493.6 260.0, 490.0 258.2, 486.2 255.7\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"user","to":"online-search"},{"seq":17,"ends":[498,314,332,314],"r":[326.4,302.1,178.6,23.7],"svg":"<g><path d=\"M500.0 312.5 C444.3 315.4, 388.8 318.0, 332.7 311.3 M497.9 315.3 C431.8 314.9, 368.1 315.6, 331.4 312.8\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M331.5 315.5 C337.2 311.9, 340.4 309.8, 345.9 307.5 M331.4 313.6 C335.5 311.4, 339.1 310.9, 343.8 307.0\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M331.8 315.2 C334.0 315.5, 337.1 317.5, 344.1 320.4 M331.3 314.8 C337.2 317.0, 340.5 318.2, 344.5 320.7\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"online-search","to":"user"},{"seq":21,"ends":[1050,372,1050,566],"r":[1037.5,364.9,23.6,207.9],"svg":"<g><path d=\"M1050.2 369.8 C1045.3 411.3, 1048.6 455.9, 1050.3 563.3 M1049.3 371.6 C1050.2 414.4, 1048.6 460.2, 1048.6 564.9\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1050.4 567.7 C1049.7 563.3, 1044.8 560.6, 1042.4 554.8 M1049.7 566.2 C1047.1 561.7, 1045.8 557.4, 1043.5 554.4\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1049.7 567.6 C1052.3 561.1, 1057.0 556.1, 1055.6 554.2 M1049.6 565.9 C1053.4 560.9, 1056.2 556.6, 1056.1 554.5\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"online-search","to":"index-store"},{"seq":25,"ends":[332,640,466,640],"r":[327.6,626.9,145.9,24.6],"svg":"<g><path d=\"M332.6 640.1 C378.2 638.2, 421.3 637.9, 468.5 637.7 M332.9 639.4 C385.7 639.3, 436.4 640.1, 467.2 638.6\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M464.3 641.1 C462.8 640.4, 456.1 645.5, 453.4 646.4 M466.6 639.9 C463.7 641.7, 459.2 642.9, 453.8 646.5\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M466.4 639.5 C462.5 638.8, 456.2 635.7, 455.4 631.9 M466.4 640.1 C461.3 637.2, 456.4 634.9, 454.0 632.7\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"data-sources","to":"offline-build"},{"seq":29,"ends":[752,640,896,640],"r":[745.4,627.5,156.9,26.3],"svg":"<g><path d=\"M750.3 639.9 C793.8 639.9, 832.0 638.0, 894.8 641.8 M751.1 638.8 C801.7 641.2, 853.4 642.5, 896.3 641.2\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M897.2 640.3 C890.1 642.7, 889.2 645.9, 883.4 648.7 M896.1 640.8 C891.1 643.1, 888.4 644.9, 884.6 646.7\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M895.7 638.1 C891.3 636.0, 888.0 633.2, 882.7 633.1 M895.4 639.9 C892.3 637.9, 888.8 636.0, 883.4 632.4\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"offline-build","to":"index-store"}],"texts":[{"seq":1,"r":[90,41,476.7,49],"t":[90,41,476.7,49],"txt":"垂直搜索引擎 · 总体架构","html":"垂直搜索引擎 · 总体架构","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:44px;font-weight:700;font-style:normal;line-height:49px;color:rgb(42, 37, 32);text-align:start;letter-spacing:normal;white-space:nowrap;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":44,"grp":"title"},{"seq":2,"r":[90,98,608.7,25],"t":[90,98,608.7,25],"txt":"离线建库写索引 · 在线检索读索引 · 两条链路通过索引存储解耦","html":"离线建库写索引 · 在线检索读索引 · 两条链路通过索引存储解耦","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:22px;font-weight:400;font-style:normal;line-height:25px;color:rgb(90, 84, 79);text-align:start;letter-spacing:normal;white-space:nowrap;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":22,"grp":"subtitle"},{"seq":4,"r":[90,255.3,240,28],"t":[187,256.3,46,25],"txt":"用户","html":"用户","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(31, 85, 130);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"user","node":0},{"seq":4,"r":[90,286.4,240,18.3],"t":[168.8,287.4,82.5,16],"txt":"搜索框 / App","html":"搜索框 / App","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(31, 85, 130);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"user","node":0},{"seq":6,"r":[500,249.8,520,36.6],"t":[700,250.8,120,33],"txt":"在线检索","html":"在线检索","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:30px;font-weight:700;font-style:normal;line-height:36.6px;color:rgb(160, 74, 31);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":30,"grp":null,"id":"online-search","node":1},{"seq":6,"r":[500,289.4,520,20.7],"t":[630.4,289.4,259.2,19],"txt":"Query 理解 · 召回 · 排序 · 结果组装","html":"Query 理解 · 召回 · 排序 · 结果组装","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:400;font-style:normal;line-height:20.74px;color:rgb(160, 74, 31);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":17,"grp":null,"id":"online-search","node":1},{"seq":8,"r":[90,615.3,240,28],"t":[175.5,616.3,69,25],"txt":"数据源","html":"数据源","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(79, 83, 89);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"data-sources","node":2},{"seq":8,"r":[90,646.4,240,18.3],"t":[139,647.4,142.1,16],"txt":"网站 · Feed · 开放 API","html":"网站 · Feed · 开放 API","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(79, 83, 89);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"data-sources","node":2},{"seq":10,"r":[470,615.3,280,28],"t":[564,616.3,92,25],"txt":"离线建库","html":"离线建库","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"offline-build","node":3},{"seq":10,"r":[470,646.4,280,18.3],"t":[523.8,647.4,172.5,16],"txt":"爬虫 · 解析 · 去重 · 建索引","html":"爬虫 · 解析 · 去重 · 建索引","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"offline-build","node":3},{"seq":12,"r":[900,615.3,300,28],"t":[1004,616.3,92,25],"txt":"索引存储","html":"索引存储","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"index-store","node":4},{"seq":12,"r":[900,646.4,300,18.3],"t":[962.5,647.4,175,16],"txt":"倒排索引 · 正排库 · 向量库","html":"倒排索引 · 正排库 · 向量库","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"index-store","node":4},{"seq":16,"r":[360,228,110,22.7],"t":[370.4,229,89.3,19],"txt":"① 搜索请求","html":"① 搜索请求","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:400;font-style:normal;line-height:20.74px;color:rgb(58, 53, 48);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":17,"grp":null},{"seq":20,"r":[370,324,90,22.7],"t":[378.9,325,72.3,19],"txt":"③ 结果页","html":"③ 结果页","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:400;font-style:normal;line-height:20.74px;color:rgb(58, 53, 48);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":17,"grp":null},{"seq":24,"r":[1066,452,110,22.7],"t":[1072,453,89.3,19],"txt":"② 读取索引","html":"② 读取索引","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:400;font-style:normal;line-height:20.74px;color:rgb(58, 53, 48);text-align:left;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":17,"grp":null},{"seq":28,"r":[370,606,60,22.7],"t":[383,607,34,19],"txt":"抓取","html":"抓取","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:400;font-style:normal;line-height:20.74px;color:rgb(58, 53, 48);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":17,"grp":null},{"seq":32,"r":[770,606,110,22.7],"t":[784.4,607,81.2,19],"txt":"写入 / 更新","html":"写入 / 更新","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:400;font-style:normal;line-height:20.74px;color:rgb(58, 53, 48);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":17,"grp":null},{"seq":33,"r":[1045,268,200,19.5],"t":[1045,269,157.3,17],"txt":"在线链路 · 毫秒级响应","html":"在线链路 · 毫秒级响应","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:16px;font-weight:400;font-style:normal;line-height:19.52px;color:rgb(122, 116, 110);text-align:left;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":16,"grp":null},{"seq":34,"r":[470,730,280,19.5],"t":[515.3,731,189.3,17],"txt":"离线链路 · 小时到天级更新","html":"离线链路 · 小时到天级更新","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:16px;font-weight:400;font-style:normal;line-height:19.52px;color:rgb(122, 116, 110);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":16,"grp":null}],"images":[],"nodes":[{"shapes":[0],"texts":[2,3],"id":"user","parent":null,"r":[84.1,211.4,253.6,134.5]},{"shapes":[1],"texts":[4,5],"id":"online-search","parent":null,"r":[492.4,184.3,533.9,193.6]},{"shapes":[2],"texts":[6,7],"id":"data-sources","parent":null,"r":[83.3,573.3,254.5,134.3]},{"shapes":[3],"texts":[8,9],"id":"offline-build","parent":null,"r":[462.6,562.9,295.6,155.8]},{"shapes":[4],"texts":[10,11],"id":"index-store","parent":null,"r":[892.7,562.7,314.6,154.7]}]},"offline":{"w":1820,"h":700,"shapes":[{"seq":3,"ends":null,"r":[62.8,243.4,223.9,97.9],"svg":"<g><path d=\"M71.7 250.0 L280.9 252.3 L281.1 336.3 L72.7 331.5\" stroke=\"none\" stroke-width=\"0\" fill=\"#e9e7e3\"><\/path><path d=\"M69.3 249.3 C139.2 246.8, 208.5 250.1, 279.7 250.8 M69.9 248.8 C141.8 251.4, 213.4 252.2, 280.5 250.7 M279.2 250.6 C277.6 277.6, 278.2 302.3, 278.5 333.8 M281.5 249.8 C280.1 280.2, 280.3 309.8, 281.3 334.4 M281.6 332.5 C196.6 331.1, 120.8 331.7, 67.7 332.3 M278.7 334.7 C224.5 332.3, 168.8 333.3, 69.9 334.7 M73.1 334.2 C70.2 306.6, 66.5 276.6, 71.2 252.9 M71.2 333.0 C69.7 313.1, 67.4 288.6, 68.4 248.8\" stroke=\"#4f5359\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"site","parent":"data-sources","node":0},{"seq":5,"ends":null,"r":[62.5,362.8,224.7,99.3],"svg":"<g><path d=\"M70.5 373.0 L282.2 371.1 L280.1 457.0 L69.9 452.6\" stroke=\"none\" stroke-width=\"0\" fill=\"#e9e7e3\"><\/path><path d=\"M67.5 370.2 C140.0 365.3, 210.4 368.7, 280.4 372.5 M69.4 369.5 C138.4 369.8, 204.6 368.5, 278.8 370.8 M281.8 369.6 C279.2 384.8, 278.4 406.6, 278.8 455.7 M279.8 371.0 C281.6 404.1, 282.9 437.6, 280.7 454.5 M281.0 452.5 C203.6 459.5, 125.7 454.8, 72.4 456.6 M281.2 453.9 C197.3 450.5, 113.8 449.6, 69.8 454.6 M70.5 455.7 C69.4 430.2, 71.5 403.4, 71.9 372.0 M69.8 453.5 C70.9 428.1, 71.9 403.6, 71.4 368.6\" stroke=\"#4f5359\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"partner-feed","parent":"data-sources","node":1},{"seq":7,"ends":null,"r":[62.4,482.5,224.2,99.5],"svg":"<g><path d=\"M67.3 490.5 L280.4 491.1 L278.7 577.0 L69.8 571.1\" stroke=\"none\" stroke-width=\"0\" fill=\"#e9e7e3\"><\/path><path d=\"M68.3 490.0 C113.4 487.9, 161.0 489.3, 277.9 491.6 M69.2 489.0 C123.5 490.8, 178.6 489.2, 280.5 491.3 M280.4 491.3 C278.5 520.5, 283.1 548.5, 280.8 573.8 M281.2 489.0 C277.5 523.6, 278.7 555.1, 279.2 574.4 M277.6 574.8 C238.7 577.0, 197.3 574.3, 69.3 575.4 M280.8 574.9 C211.3 576.0, 143.0 574.0, 70.0 574.5 M67.6 574.3 C69.3 555.4, 69.5 529.7, 71.7 487.5 M71.3 575.3 C69.3 540.9, 70.6 509.8, 70.0 488.9\" stroke=\"#4f5359\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"open-api","parent":"data-sources","node":2},{"seq":9,"ends":null,"r":[374.6,188.1,253.2,80.1],"svg":"<g><path d=\"M382.9 194.7 L619.6 197.5 L621.0 256.8 L381.2 261.5\" stroke=\"none\" stroke-width=\"0\" fill=\"#dde8e7\"><\/path><path d=\"M380.0 194.2 C463.0 199.9, 548.6 198.3, 622.4 194.8 M380.4 194.9 C471.1 197.3, 561.3 195.4, 620.5 195.2 M616.9 196.3 C622.4 206.4, 624.0 223.7, 621.8 257.0 M618.5 195.4 C619.6 218.6, 618.0 244.7, 619.0 261.5 M619.8 261.1 C561.3 263.5, 500.2 264.6, 380.7 257.6 M620.6 258.7 C546.9 265.1, 477.2 263.8, 379.6 260.1 M382.6 258.1 C381.9 236.4, 382.6 216.8, 379.5 193.1 M380.3 260.3 C380.6 240.8, 379.0 224.1, 381.0 197.0\" stroke=\"#106668\" stroke-width=\"2.2\" fill=\"none\"><\/path><\/g>","grp":null,"id":"url-queue","parent":"offline-build","node":3},{"seq":11,"ends":null,"r":[392.3,352.1,215.3,135.9],"svg":"<g><path d=\"M399.3 357.8 L599.9 358.2 L601.8 483.0 L397.4 482.1\" stroke=\"none\" stroke-width=\"0\" fill=\"#f4eacd\"><\/path><path d=\"M397.3 362.6 C455.1 361.1, 516.3 365.3, 600.8 357.3 M400.3 359.9 C447.5 360.7, 497.6 359.7, 600.4 359.1 M599.1 362.9 C598.9 392.1, 599.2 420.4, 599.3 481.0 M600.7 361.5 C600.2 388.0, 598.2 412.7, 598.5 479.1 M602.6 480.9 C556.9 478.9, 513.6 482.2, 398.0 479.8 M599.2 480.6 C554.3 482.5, 507.6 481.2, 401.4 478.6 M402.1 478.2 C403.6 429.9, 399.1 383.2, 399.9 357.0 M400.9 479.8 C399.2 443.9, 397.9 404.9, 400.3 361.3\" stroke=\"#7d4f0a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"crawler","node":4},{"seq":13,"ends":null,"r":[663.4,352.3,213.1,136.7],"svg":"<g><path d=\"M668.4 359.2 L868.0 361.3 L869.1 477.5 L669.5 478.2\" stroke=\"none\" stroke-width=\"0\" fill=\"#f4eacd\"><\/path><path d=\"M670.7 361.4 C729.0 358.3, 788.8 360.1, 868.8 358.5 M670.3 360.6 C730.7 362.5, 789.7 363.8, 869.8 360.1 M868.9 362.6 C872.1 399.1, 873.2 444.9, 867.3 482.8 M871.0 359.9 C871.1 390.0, 868.7 419.3, 869.2 480.2 M870.1 481.3 C808.1 486.0, 745.7 484.3, 669.8 477.8 M868.6 478.6 C826.4 476.0, 783.0 476.8, 669.1 478.6 M669.1 476.9 C673.0 446.6, 673.3 414.4, 671.0 357.2 M669.8 480.6 C669.8 452.6, 670.3 429.2, 670.2 358.8\" stroke=\"#7d4f0a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"parser","node":5},{"seq":15,"ends":null,"r":[933.5,352.9,215.1,134.7],"svg":"<g><path d=\"M941.5 359.4 L1140.0 360.8 L1142.8 481.5 L942.0 480.8\" stroke=\"none\" stroke-width=\"0\" fill=\"#f4eacd\"><\/path><path d=\"M939.6 357.8 C990.2 366.0, 1038.2 364.6, 1139.3 361.9 M940.8 358.7 C993.0 362.4, 1044.4 362.4, 1140.3 360.1 M1142.9 359.9 C1144.6 388.3, 1142.3 415.4, 1141.7 478.5 M1141.2 360.8 C1142.6 400.9, 1141.7 445.0, 1139.3 478.8 M1141.0 480.1 C1070.9 479.3, 1003.0 475.9, 939.4 482.5 M1139.6 479.8 C1084.7 480.1, 1029.3 479.0, 939.6 479.8 M939.5 482.5 C944.5 456.0, 942.9 431.3, 941.0 360.8 M938.5 478.5 C940.2 450.7, 938.5 420.5, 938.9 359.8\" stroke=\"#7d4f0a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"dedup","node":6},{"seq":17,"ends":null,"r":[1202.9,352.2,214.6,134.4],"svg":"<g><path d=\"M1210.9 360.4 L1407.2 358.4 L1409.9 480.4 L1209.2 479.8\" stroke=\"none\" stroke-width=\"0\" fill=\"#f4eacd\"><\/path><path d=\"M1210.3 360.1 C1258.3 363.6, 1310.6 362.6, 1412.4 358.0 M1208.8 361.4 C1269.9 359.4, 1327.5 359.9, 1410.0 359.8 M1411.1 357.1 C1414.0 389.8, 1409.4 422.4, 1407.5 477.5 M1410.5 358.4 C1409.3 405.3, 1409.6 446.3, 1409.9 480.8 M1410.0 477.6 C1361.1 479.1, 1305.0 483.4, 1211.4 480.7 M1411.3 480.9 C1337.0 478.8, 1266.9 477.0, 1210.6 480.2 M1207.8 477.5 C1212.4 449.8, 1208.8 427.5, 1210.9 357.3 M1209.8 479.9 C1209.5 441.7, 1208.0 404.7, 1209.5 358.6\" stroke=\"#7d4f0a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"indexer","node":7},{"seq":19,"ends":null,"r":[364.8,316.7,1079.8,202.4],"svg":"<g><path d=\"M371.6 322.8 C764.0 326.6, 1157.0 327.3, 1438.4 321.9 M372.1 321.6 C716.7 323.1, 1062.4 323.5, 1438.4 321.8\" stroke=\"#7d4f0a\" stroke-width=\"1.6\" fill=\"none\" stroke-dasharray=\"10 6\"><\/path><\/g><g><path d=\"M1439.2 324.0 C1439.2 370.6, 1438.9 420.1, 1437.3 513.6 M1438.3 321.6 C1440.8 368.4, 1438.9 412.6, 1437.9 511.1\" stroke=\"#7d4f0a\" stroke-width=\"1.6\" fill=\"none\" stroke-dasharray=\"10 6\"><\/path><\/g><g><path d=\"M1438.7 512.1 C1125.9 509.6, 813.1 509.7, 371.7 512.9 M1437.7 511.9 C1015.9 513.2, 592.9 513.4, 372.4 512.2\" stroke=\"#7d4f0a\" stroke-width=\"1.6\" fill=\"none\" stroke-dasharray=\"10 6\"><\/path><\/g><g><path d=\"M370.0 514.0 C374.1 469.5, 372.9 431.3, 369.7 323.4 M372.2 512.3 C372.6 450.4, 372.4 388.3, 372.1 322.9\" stroke=\"#7d4f0a\" stroke-width=\"1.6\" fill=\"none\" stroke-dasharray=\"10 6\"><\/path><\/g>","grp":"frame","id":"offline-build","label":17},{"seq":24,"ends":[602,420,666,420],"r":[596.3,406.6,77,27.3],"svg":"<g><path d=\"M601.3 417.7 C628.3 422.6, 652.8 420.0, 668.2 417.9 M602.1 419.5 C619.7 421.1, 636.1 420.0, 664.8 419.0\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M665.7 419.4 C660.3 423.8, 654.9 426.1, 653.1 428.9 M666.1 419.7 C663.8 420.6, 660.9 422.7, 654.0 427.2\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M665.2 420.3 C662.8 416.1, 657.9 414.1, 654.1 411.6 M666.5 419.7 C662.5 418.7, 659.6 416.5, 654.2 412.3\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"crawler","to":"parser"},{"seq":27,"ends":[872,420,936,420],"r":[865.4,407.1,76.5,25.9],"svg":"<g><path d=\"M870.3 422.7 C898.8 419.8, 922.2 418.6, 933.8 422.7 M871.6 420.5 C887.7 420.3, 903.6 420.3, 934.7 420.2\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M935.7 419.6 C931.2 422.4, 928.9 425.3, 924.3 428.0 M935.2 420.4 C933.1 421.4, 931.3 423.5, 923.7 427.0\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M934.4 420.2 C930.0 417.3, 925.0 414.1, 924.7 412.7 M936.9 420.7 C932.4 416.5, 926.9 414.6, 924.2 412.1\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"parser","to":"dedup"},{"seq":30,"ends":[1142,420,1206,420],"r":[1136.8,406.1,75.4,26.1],"svg":"<g><path d=\"M1141.7 421.3 C1159.5 420.6, 1181.0 419.0, 1206.0 418.6 M1142.9 421.3 C1158.3 419.1, 1175.5 420.5, 1204.7 420.3\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1207.1 420.1 C1204.1 422.2, 1197.9 425.5, 1191.9 426.8 M1206.4 420.5 C1202.2 421.8, 1196.9 425.3, 1194.7 427.1\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1206.0 420.1 C1201.5 418.6, 1198.1 414.3, 1194.8 411.1 M1206.8 420.3 C1201.6 418.0, 1197.1 414.1, 1194.1 412.7\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"dedup","to":"indexer"},{"seq":33,"ends":[282,292,396,396],"r":[278.2,284.6,123.7,118],"svg":"<g><path d=\"M283.1 289.6 C314.7 321.3, 346.1 347.1, 395.0 395.6 M283.2 292.3 C306.4 311.4, 329.4 333.1, 396.8 395.8\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M396.2 397.0 C390.2 392.9, 383.8 394.1, 383.9 391.8 M396.0 396.5 C392.5 394.4, 389.2 394.8, 381.9 392.6\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M395.5 397.5 C395.9 394.7, 393.7 391.4, 391.2 381.8 M396.3 395.4 C395.3 392.3, 392.4 387.9, 392.2 382.8\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"site","to":"crawler"},{"seq":36,"ends":[282,412,396,420],"r":[276.9,405.5,124.3,26],"svg":"<g><path d=\"M281.8 414.0 C314.5 414.2, 350.9 413.8, 395.1 420.1 M283.1 412.1 C319.3 416.1, 357.0 417.6, 394.6 419.3\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M395.9 419.7 C392.8 421.6, 387.0 423.9, 381.6 424.4 M395.9 420.9 C393.1 421.3, 390.5 423.0, 384.1 426.4\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M394.7 421.7 C391.9 418.3, 387.3 413.0, 382.9 410.4 M396.1 420.7 C393.7 417.5, 390.5 416.9, 383.6 412.3\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"partner-feed","to":"crawler"},{"seq":39,"ends":[282,532,396,444],"r":[277.7,438.2,124.6,98.8],"svg":"<g><path d=\"M283.4 532.0 C307.8 509.6, 337.7 487.3, 394.6 446.6 M282.7 531.1 C325.0 500.6, 367.2 465.9, 396.0 445.0\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M397.3 444.8 C393.2 445.7, 392.4 451.4, 389.3 455.5 M395.0 443.2 C394.8 448.7, 392.4 453.3, 390.8 456.3\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M396.0 444.3 C390.9 446.3, 390.9 446.7, 383.9 447.5 M395.3 444.2 C392.0 445.2, 386.6 444.6, 381.3 445.8\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"open-api","to":"crawler"},{"seq":42,"ends":[500,262,500,356],"r":[486.7,254.9,25.4,108.7],"svg":"<g><path d=\"M499.9 259.8 C496.3 284.5, 500.1 308.2, 502.4 358.5 M500.4 262.9 C500.8 286.9, 501.2 309.4, 499.2 355.1\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M498.9 356.9 C496.3 354.1, 497.0 348.8, 491.6 344.3 M500.4 356.5 C497.7 354.0, 497.5 351.3, 493.8 343.5\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M501.4 356.8 C503.1 352.2, 503.5 346.8, 506.4 345.4 M499.1 355.3 C502.2 351.4, 505.2 346.9, 507.1 343.8\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"url-queue","to":"crawler"},{"seq":46,"ends":[770,356,624,242],"r":[617,235.7,159.2,126.6],"svg":"<g><path d=\"M768.9 357.2 C721.3 318.7, 670.3 280.9, 622.0 242.6 M771.2 356.2 C720.6 313.0, 668.1 275.6, 624.8 242.2\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M623.5 240.7 C627.3 243.2, 632.8 244.0, 639.5 243.5 M623.3 241.6 C628.1 241.7, 630.4 242.2, 638.1 244.0\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M623.5 243.3 C626.1 245.9, 627.4 250.4, 629.4 255.4 M624.0 241.0 C625.7 245.5, 626.8 250.8, 629.8 255.3\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"parser","to":"url-queue"},{"seq":50,"ends":null,"r":[1523.1,243.2,245,97.7],"svg":"<g><path d=\"M1532.2 248.1 L1763.0 250.3 L1762.5 335.2 L1529.4 335.9\" stroke=\"none\" stroke-width=\"0\" fill=\"#ede2d5\"><\/path><path d=\"M1529.0 250.9 C1578.4 254.3, 1631.4 255.1, 1758.9 249.1 M1529.4 249.0 C1584.6 251.6, 1641.3 252.1, 1760.3 249.0 M1759.3 249.9 C1760.4 281.1, 1761.2 310.3, 1761.3 333.8 M1761.0 251.5 C1760.2 272.6, 1757.3 294.8, 1758.4 333.6 M1761.6 335.0 C1705.5 335.4, 1651.8 333.8, 1528.1 332.1 M1760.0 334.3 C1686.8 336.6, 1616.9 336.0, 1528.9 333.7 M1528.6 331.8 C1528.0 303.8, 1531.1 272.1, 1529.3 251.9 M1530.2 335.4 C1527.9 301.3, 1528.3 268.8, 1528.8 251.3\" stroke=\"#6e554a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"inverted-index","parent":"index-store","node":8},{"seq":52,"ends":null,"r":[1522.7,362.2,244.7,98.8],"svg":"<g><path d=\"M1527.7 371.7 L1761.0 370.2 L1761.2 451.4 L1531.6 454.6\" stroke=\"none\" stroke-width=\"0\" fill=\"#ede2d5\"><\/path><path d=\"M1529.2 371.6 C1595.8 367.3, 1663.6 365.3, 1760.3 370.7 M1531.1 369.1 C1600.7 373.8, 1671.4 374.5, 1759.3 371.1 M1760.4 367.1 C1761.9 390.8, 1757.4 413.8, 1762.4 453.2 M1761.1 371.1 C1761.0 388.1, 1761.4 407.1, 1759.3 453.6 M1761.5 454.0 C1693.8 452.0, 1625.2 452.3, 1528.2 453.3 M1760.5 453.9 C1706.0 456.9, 1653.1 456.5, 1529.2 453.0 M1531.9 453.6 C1530.4 419.4, 1530.3 389.0, 1532.3 372.2 M1530.0 453.9 C1530.1 422.4, 1528.8 393.6, 1528.4 370.0\" stroke=\"#6e554a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"forward-store","parent":"index-store","node":9},{"seq":54,"ends":null,"r":[1522.7,481.3,245,100],"svg":"<g><path d=\"M1527.8 491.2 L1760.7 489.1 L1758.9 572.8 L1532.5 575.6\" stroke=\"none\" stroke-width=\"0\" fill=\"#ede2d5\"><\/path><path d=\"M1531.2 489.5 C1596.3 485.9, 1659.8 485.0, 1758.8 488.0 M1530.0 489.4 C1577.5 494.3, 1624.2 494.4, 1761.0 489.1 M1762.7 491.2 C1761.2 514.3, 1761.6 534.8, 1761.3 575.5 M1759.0 491.1 C1758.8 517.9, 1759.6 545.0, 1759.6 573.0 M1762.6 572.8 C1690.5 578.2, 1618.8 576.3, 1527.7 573.0 M1760.1 574.4 C1699.8 570.4, 1638.1 571.5, 1528.8 572.7 M1529.5 570.9 C1527.7 545.3, 1529.8 517.7, 1529.1 487.9 M1529.9 573.7 C1527.4 547.1, 1526.6 516.1, 1531.1 490.6\" stroke=\"#6e554a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"vector-store","parent":"index-store","node":10},{"seq":56,"ends":[1412,396,1526,292],"r":[1406,286.5,125.9,114.7],"svg":"<g><path d=\"M1410.9 396.1 C1448.9 365.4, 1482.8 330.1, 1524.1 293.6 M1412.0 395.1 C1455.1 355.8, 1500.7 316.3, 1526.1 292.5\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1525.7 291.4 C1524.0 294.2, 1524.8 301.0, 1523.3 305.0 M1526.2 292.7 C1524.6 295.4, 1524.7 296.6, 1522.1 305.4\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1526.8 292.9 C1520.4 292.3, 1520.4 292.7, 1512.3 294.2 M1525.3 291.9 C1521.4 291.9, 1518.4 294.4, 1511.6 295.4\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"indexer","to":"inverted-index"},{"seq":59,"ends":[1412,420,1526,412],"r":[1404.4,399.3,127.2,26.6],"svg":"<g><path d=\"M1409.3 420.9 C1453.7 419.0, 1498.6 414.9, 1523.2 410.6 M1411.8 419.4 C1446.8 415.4, 1482.9 414.4, 1525.2 412.6\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1524.9 413.4 C1523.5 413.7, 1519.4 417.0, 1515.2 420.5 M1526.6 412.6 C1522.6 415.4, 1518.3 417.3, 1514.1 419.9\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1524.2 412.1 C1525.1 411.9, 1522.4 407.8, 1514.7 404.2 M1525.0 412.2 C1523.2 411.0, 1519.5 409.0, 1514.3 406.6\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"indexer","to":"forward-store"},{"seq":62,"ends":[1412,444,1526,532],"r":[1404.8,438.8,127.9,99.9],"svg":"<g><path d=\"M1409.7 445.2 C1443.7 468.1, 1478.5 495.0, 1527.6 532.5 M1410.8 443.7 C1446.0 472.1, 1479.6 496.6, 1525.2 533.0\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1526.6 533.0 C1520.6 530.1, 1515.2 529.9, 1512.6 530.3 M1526.6 532.6 C1522.8 530.6, 1518.2 530.9, 1512.1 529.9\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1524.6 533.6 C1526.0 526.0, 1522.8 524.0, 1522.2 517.3 M1525.8 532.9 C1523.6 528.3, 1522.9 523.7, 1520.3 518.8\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"indexer","to":"vector-store"}],"texts":[{"seq":1,"r":[70,41,520.7,49],"t":[70,41,520.7,49],"txt":"离线建库 · 从数据源到索引","html":"离线建库 · 从数据源到索引","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:44px;font-weight:700;font-style:normal;line-height:49px;color:rgb(42, 37, 32);text-align:start;letter-spacing:normal;white-space:nowrap;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":44,"grp":"title"},{"seq":2,"r":[70,98,640.8,25],"t":[70,98,640.8,25],"txt":"按 URL 队列抓取 · 解析出的新链接回流队列 · 建库后写入三类存储","html":"按 URL 队列抓取 · 解析出的新链接回流队列 · 建库后写入三类存储","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:22px;font-weight:400;font-style:normal;line-height:25px;color:rgb(90, 84, 79);text-align:start;letter-spacing:normal;white-space:nowrap;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":22,"grp":"subtitle"},{"seq":4,"r":[70,268.5,210,25.6],"t":[133,268.5,84,24],"txt":"目标网站","html":"目标网站","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:21px;font-weight:700;font-style:normal;line-height:25.62px;color:rgb(79, 83, 89);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":21,"grp":null,"id":"site","parent":"data-sources","node":0},{"seq":4,"r":[70,297.1,210,18.3],"t":[130,298.1,90,16],"txt":"垂直领域站点","html":"垂直领域站点","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(79, 83, 89);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"site","parent":"data-sources","node":0},{"seq":6,"r":[70,388.5,210,25.6],"t":[119.3,388.5,111.4,24],"txt":"合作方 Feed","html":"合作方 Feed","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:21px;font-weight:700;font-style:normal;line-height:25.62px;color:rgb(79, 83, 89);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":21,"grp":null,"id":"partner-feed","parent":"data-sources","node":1},{"seq":6,"r":[70,417.1,210,18.3],"t":[122.5,418.1,105,16],"txt":"结构化数据推送","html":"结构化数据推送","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(79, 83, 89);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"partner-feed","parent":"data-sources","node":1},{"seq":8,"r":[70,508.5,210,25.6],"t":[133.3,508.5,83.4,24],"txt":"开放 API","html":"开放 API","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:21px;font-weight:700;font-style:normal;line-height:25.62px;color:rgb(79, 83, 89);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":21,"grp":null,"id":"open-api","parent":"data-sources","node":2},{"seq":8,"r":[70,537.1,210,18.3],"t":[122.5,538.1,105,16],"txt":"第三方数据接口","html":"第三方数据接口","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(79, 83, 89);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"open-api","parent":"data-sources","node":2},{"seq":10,"r":[380,213,240,25.6],"t":[433.8,213,132.4,24],"txt":"URL 抓取队列","html":"URL 抓取队列","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:21px;font-weight:700;font-style:normal;line-height:25.62px;color:rgb(16, 102, 104);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":21,"grp":null,"node":3},{"seq":12,"r":[400,395.3,200,28],"t":[477,396.3,46,25],"txt":"爬虫","html":"爬虫","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"crawler","node":4},{"seq":12,"r":[400,426.4,200,18.3],"t":[438.4,427.4,123.2,16],"txt":"抓取 HTML / JSON","html":"抓取 HTML / JSON","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"crawler","node":4},{"seq":14,"r":[670,395.3,200,28],"t":[724,396.3,92,25],"txt":"解析抽取","html":"解析抽取","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"parser","node":5},{"seq":14,"r":[670,426.4,200,18.3],"t":[705,427.4,130,16],"txt":"正文 · 字段 · 新链接","html":"正文 · 字段 · 新链接","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"parser","node":5},{"seq":16,"r":[940,395.3,200,28],"t":[994,396.3,92,25],"txt":"去重清洗","html":"去重清洗","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"dedup","node":6},{"seq":16,"r":[940,426.4,200,18.3],"t":[973.8,427.4,132.5,16],"txt":"近似去重 · 过滤垃圾","html":"近似去重 · 过滤垃圾","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"dedup","node":6},{"seq":18,"r":[1210,395.3,200,28],"t":[1275.5,396.3,69,25],"txt":"建索引","html":"建索引","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"indexer","node":7},{"seq":18,"r":[1210,426.4,200,18.3],"t":[1245,427.4,130,16],"txt":"分词 · 倒排 · 向量化","html":"分词 · 倒排 · 向量化","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(125, 79, 10);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"indexer","node":7},{"seq":23,"r":[390,309,100,22.7],"t":[396,310,68,19],"txt":"离线建库","html":"离线建库","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:700;font-style:normal;line-height:20.74px;color:rgb(125, 79, 10);text-align:left;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":17,"grp":"frame","id":"offline-build"},{"seq":45,"r":[510,290,86,21.5],"t":[516,292,68,17],"txt":"待抓 URL","html":"待抓 URL","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:16px;font-weight:400;font-style:normal;line-height:19.52px;color:rgb(58, 53, 48);text-align:left;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":16,"grp":null},{"seq":49,"r":[712,246,104,21.5],"t":[718,248,80,17],"txt":"新发现链接","html":"新发现链接","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:16px;font-weight:400;font-style:normal;line-height:19.52px;color:rgb(58, 53, 48);text-align:left;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":16,"grp":null},{"seq":51,"r":[1530,268.5,230,25.6],"t":[1603,268.5,84,24],"txt":"倒排索引","html":"倒排索引","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:21px;font-weight:700;font-style:normal;line-height:25.62px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":21,"grp":null,"id":"inverted-index","parent":"index-store","node":8},{"seq":51,"r":[1530,297.1,230,18.3],"t":[1596.3,298.1,97.5,16],"txt":"词 → 文档列表","html":"词 → 文档列表","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"inverted-index","parent":"index-store","node":8},{"seq":53,"r":[1530,388.5,230,25.6],"t":[1613.5,388.5,63,24],"txt":"正排库","html":"正排库","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:21px;font-weight:700;font-style:normal;line-height:25.62px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":21,"grp":null,"id":"forward-store","parent":"index-store","node":9},{"seq":53,"r":[1530,417.1,230,18.3],"t":[1594,418.1,102.1,16],"txt":"文档 ID → 内容","html":"文档 ID → 内容","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"forward-store","parent":"index-store","node":9},{"seq":55,"r":[1530,508.5,230,25.6],"t":[1613.5,508.5,63,24],"txt":"向量库","html":"向量库","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:21px;font-weight:700;font-style:normal;line-height:25.62px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":21,"grp":null,"id":"vector-store","parent":"index-store","node":10},{"seq":55,"r":[1530,537.1,230,18.3],"t":[1578.8,538.1,132.5,16],"txt":"语义向量 · 近邻检索","html":"语义向量 · 近邻检索","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"vector-store","parent":"index-store","node":10},{"seq":65,"r":[70,640,520,18.3],"t":[70,641,282.5,16],"txt":"全量重建通常按天 · 增量更新按小时或更快","html":"全量重建通常按天 · 增量更新按小时或更快","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(122, 116, 110);text-align:left;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":15,"grp":null}],"images":[],"nodes":[{"shapes":[0],"texts":[2,3],"id":"site","parent":"data-sources","r":[62.8,243.4,223.9,97.9]},{"shapes":[1],"texts":[4,5],"id":"partner-feed","parent":"data-sources","r":[62.5,362.8,224.7,99.3]},{"shapes":[2],"texts":[6,7],"id":"open-api","parent":"data-sources","r":[62.4,482.5,224.2,99.5]},{"shapes":[3],"texts":[8],"id":"url-queue","parent":"offline-build","r":[374.6,188.1,253.2,80.1]},{"shapes":[4],"texts":[9,10],"id":"crawler","parent":"offline-build","r":[392.3,352.1,215.3,135.9]},{"shapes":[5],"texts":[11,12],"id":"parser","parent":"offline-build","r":[663.4,352.3,213.1,136.7]},{"shapes":[6],"texts":[13,14],"id":"dedup","parent":"offline-build","r":[933.5,352.9,215.1,134.7]},{"shapes":[7],"texts":[15,16],"id":"indexer","parent":"offline-build","r":[1202.9,352.2,214.6,134.4]},{"shapes":[17],"texts":[20,21],"id":"inverted-index","parent":"index-store","r":[1523.1,243.2,245,97.7]},{"shapes":[18],"texts":[22,23],"id":"forward-store","parent":"index-store","r":[1522.7,362.2,244.7,98.8]},{"shapes":[19],"texts":[24,25],"id":"vector-store","parent":"index-store","r":[1522.7,481.3,245,100]}]},"online":{"w":1720,"h":760,"shapes":[{"seq":3,"ends":null,"r":[62.1,322.5,215.4,134.4],"svg":"<g><path d=\"M69.5 332.7 L269.4 332.7 L268.1 449.6 L67.1 448.7\" stroke=\"none\" stroke-width=\"0\" fill=\"#e3ebf2\"><\/path><path d=\"M68.9 327.4 C128.1 332.9, 190.1 329.9, 270.4 332.5 M70.8 328.9 C147.1 332.8, 225.7 332.3, 270.8 330.8 M272.5 331.9 C270.4 357.7, 268.9 384.5, 267.0 450.7 M270.7 328.8 C269.4 371.4, 267.0 413.9, 271.5 450.6 M268.8 450.8 C218.8 450.7, 171.6 452.1, 67.2 449.2 M268.9 448.9 C212.9 446.2, 153.4 447.0, 69.5 449.8 M68.6 451.8 C68.1 414.1, 64.8 376.6, 70.1 328.1 M70.3 450.8 C68.4 410.9, 67.9 375.0, 71.2 330.6\" stroke=\"#1f5582\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"user","node":0},{"seq":5,"ends":null,"r":[371.9,322.3,245.6,135.5],"svg":"<g><path d=\"M382.6 331.8 L612.5 330.0 L609.2 447.1 L380.5 452.5\" stroke=\"none\" stroke-width=\"0\" fill=\"#f3e2cf\"><\/path><path d=\"M380.9 328.5 C453.2 331.1, 528.9 327.8, 607.3 327.3 M380.3 329.0 C468.5 330.0, 556.2 331.7, 610.6 330.6 M610.9 327.3 C610.4 356.9, 611.5 380.2, 608.7 449.7 M610.8 330.1 C609.0 357.1, 609.3 383.6, 610.4 448.5 M607.6 451.3 C540.2 450.1, 474.1 453.6, 380.3 452.7 M608.8 450.8 C559.4 450.4, 509.4 449.1, 381.1 448.9 M379.6 446.8 C379.3 420.5, 380.5 386.7, 376.9 327.7 M380.5 450.2 C380.6 408.4, 378.6 365.2, 381.0 329.9\" stroke=\"#a04a1f\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"query-understanding","node":1},{"seq":7,"ends":null,"r":[711.9,322.1,245.7,135],"svg":"<g><path d=\"M716.9 327.1 L952.5 330.8 L948.8 451.2 L718.0 446.8\" stroke=\"none\" stroke-width=\"0\" fill=\"#f3e2cf\"><\/path><path d=\"M721.8 331.7 C791.6 332.0, 860.8 332.2, 951.2 328.2 M719.3 328.8 C795.5 328.3, 874.7 327.1, 950.7 331.0 M949.4 330.6 C948.5 370.4, 952.6 406.0, 947.3 449.1 M950.3 328.5 C948.2 373.1, 948.0 419.7, 951.4 451.2 M952.6 451.3 C860.6 451.0, 766.8 449.3, 721.9 449.0 M949.8 449.2 C878.9 452.9, 805.6 453.0, 720.2 449.7 M722.1 449.3 C723.7 407.3, 719.9 373.4, 721.4 332.3 M719.3 448.6 C719.4 404.6, 719.2 360.0, 721.2 329.9\" stroke=\"#a04a1f\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"recall","node":2},{"seq":9,"ends":null,"r":[1052.2,322.1,245.8,134.4],"svg":"<g><path d=\"M1057.7 332.0 L1287.1 327.9 L1290.1 447.4 L1057.1 450.8\" stroke=\"none\" stroke-width=\"0\" fill=\"#f3e2cf\"><\/path><path d=\"M1059.2 331.0 C1106.2 330.4, 1158.7 330.6, 1288.8 330.9 M1061.1 329.4 C1115.0 330.8, 1168.6 330.8, 1288.6 329.3 M1292.8 329.2 C1293.6 354.9, 1290.6 384.5, 1290.8 450.8 M1291.1 331.0 C1291.6 356.1, 1290.6 379.6, 1289.2 449.6 M1289.9 451.4 C1234.0 449.0, 1179.1 445.7, 1057.5 449.5 M1291.2 451.1 C1241.2 450.5, 1194.3 450.4, 1058.9 450.7 M1058.0 447.7 C1056.9 425.3, 1057.9 395.8, 1061.2 327.0 M1061.5 448.6 C1064.1 404.1, 1063.8 354.1, 1058.8 329.9\" stroke=\"#a04a1f\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"ranking","node":3},{"seq":11,"ends":null,"r":[1392.2,322.4,245.7,133.2],"svg":"<g><path d=\"M1398.3 329.2 L1628.2 331.5 L1630.2 449.4 L1397.2 448.3\" stroke=\"none\" stroke-width=\"0\" fill=\"#f3e2cf\"><\/path><path d=\"M1402.5 331.9 C1460.1 335.5, 1522.6 331.5, 1632.6 329.3 M1400.0 330.5 C1460.9 332.5, 1524.0 332.1, 1629.9 328.7 M1629.0 327.3 C1630.0 376.3, 1635.1 428.5, 1631.7 449.8 M1629.5 329.4 C1629.1 360.7, 1630.9 390.3, 1630.5 450.0 M1628.6 447.9 C1558.8 445.7, 1489.9 448.3, 1398.8 447.3 M1629.0 449.5 C1558.8 446.3, 1490.1 447.1, 1400.7 450.5 M1398.0 450.4 C1399.8 405.0, 1399.8 361.1, 1401.1 328.5 M1398.7 448.7 C1403.8 418.8, 1401.0 389.3, 1398.7 329.7\" stroke=\"#a04a1f\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"assembly","node":4},{"seq":13,"ends":null,"r":[334.2,272.3,1341.8,226],"svg":"<g><path d=\"M340.3 282.0 C656.8 280.1, 973.0 281.1, 1670.6 282.2 M339.7 282.2 C799.3 275.7, 1257.5 275.7, 1669.7 281.5\" stroke=\"#a04a1f\" stroke-width=\"1.6\" fill=\"none\" stroke-dasharray=\"10 6\"><\/path><\/g><g><path d=\"M1670.0 284.0 C1671.2 334.2, 1671.7 390.2, 1668.6 492.8 M1670.4 282.7 C1670.2 327.9, 1671.2 372.2, 1669.0 491.6\" stroke=\"#a04a1f\" stroke-width=\"1.6\" fill=\"none\" stroke-dasharray=\"10 6\"><\/path><\/g><g><path d=\"M1669.4 492.5 C1275.0 492.5, 880.9 494.0, 339.2 492.7 M1670.3 492.0 C1204.4 491.9, 738.8 492.5, 340.2 491.7\" stroke=\"#a04a1f\" stroke-width=\"1.6\" fill=\"none\" stroke-dasharray=\"10 6\"><\/path><\/g><g><path d=\"M341.3 490.6 C339.2 429.9, 340.6 363.4, 341.7 283.9 M340.7 491.5 C339.6 422.9, 338.6 355.1, 340.1 281.2\" stroke=\"#a04a1f\" stroke-width=\"1.6\" fill=\"none\" stroke-dasharray=\"10 6\"><\/path><\/g>","grp":"frame","id":"online-search","label":12},{"seq":18,"ends":[612,390,716,390],"r":[604.5,378.2,118.4,23.7],"svg":"<g><path d=\"M609.4 387.6 C647.3 388.7, 678.1 387.6, 713.4 391.6 M612.9 390.8 C638.9 391.2, 663.4 391.0, 714.9 389.6\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M717.8 388.9 C712.3 392.4, 707.1 395.7, 703.7 396.8 M716.3 389.0 C713.0 390.6, 710.1 393.1, 704.7 396.9\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M716.0 390.0 C714.5 386.4, 709.8 387.2, 703.5 383.2 M715.2 390.7 C713.2 389.2, 710.4 386.3, 704.6 383.4\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"query-understanding","to":"recall"},{"seq":21,"ends":[952,390,1056,390],"r":[946,377.3,116.4,25],"svg":"<g><path d=\"M951.0 390.5 C976.2 390.8, 1003.1 393.0, 1055.1 388.9 M952.4 391.1 C983.2 391.2, 1015.5 391.1, 1057.3 390.5\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1054.5 391.3 C1052.3 392.7, 1046.6 396.8, 1043.8 395.5 M1055.3 389.5 C1051.9 392.0, 1050.0 393.5, 1043.0 397.2\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1054.3 391.5 C1049.6 385.6, 1047.8 383.2, 1043.6 384.0 M1055.5 390.5 C1053.4 387.9, 1049.7 387.4, 1044.0 382.3\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"recall","to":"ranking"},{"seq":24,"ends":[1292,390,1396,390],"r":[1286.3,377.2,115.1,24.3],"svg":"<g><path d=\"M1291.3 387.5 C1319.7 388.4, 1354.9 389.5, 1393.7 388.3 M1292.4 389.7 C1322.5 388.9, 1352.7 389.1, 1394.6 390.1\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1396.2 389.7 C1394.4 393.2, 1390.8 392.8, 1383.9 396.5 M1396.4 390.3 C1391.6 392.4, 1388.8 394.1, 1384.2 396.1\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1396.3 391.2 C1392.7 388.3, 1388.1 383.7, 1382.8 383.9 M1395.8 390.7 C1392.7 389.2, 1390.4 386.5, 1383.4 382.2\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"ranking","to":"assembly"},{"seq":27,"ends":[272,390,376,390],"r":[267,377.2,114.5,24.2],"svg":"<g><path d=\"M271.9 391.1 C308.4 389.6, 341.6 387.1, 374.0 389.0 M272.2 391.3 C309.7 390.7, 344.8 390.8, 375.0 390.5\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M376.5 390.1 C374.4 390.2, 371.4 393.1, 365.6 395.4 M375.0 389.3 C370.4 391.7, 366.2 395.6, 363.4 396.3\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M376.1 389.6 C374.5 390.1, 371.3 388.6, 365.8 383.3 M376.4 389.4 C372.2 388.0, 366.6 385.0, 364.7 382.1\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"user","to":"query-understanding"},{"seq":31,"ends":null,"r":[1507.9,199.9,14.5,132.9],"svg":"<g><path d=\"M1517.4 327.5 C1516.1 280.0, 1515.0 231.0, 1512.9 205.4 M1514.1 327.8 C1513.0 288.3, 1513.3 246.6, 1515.9 204.9\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":null},{"seq":32,"ends":null,"r":[163.9,199.6,1356.8,15.3],"svg":"<g><path d=\"M1515.7 205.4 C1196.9 208.1, 881.8 209.1, 168.9 205.9 M1514.6 205.1 C1056.7 211.3, 599.1 211.8, 169.7 204.6\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":null},{"seq":33,"ends":[170,205,170,326],"r":[157.2,198.6,25.7,133.3],"svg":"<g><path d=\"M171.8 207.6 C173.4 246.2, 171.7 284.2, 168.0 325.9 M169.2 203.6 C171.1 238.5, 171.6 272.5, 169.8 326.9\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M170.6 324.7 C167.9 320.5, 163.9 317.6, 163.1 314.1 M169.2 325.3 C166.8 322.8, 165.0 317.8, 162.1 313.6\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M168.1 325.4 C172.5 322.2, 173.9 317.8, 177.5 312.6 M169.2 325.0 C173.1 323.0, 173.9 319.2, 177.9 314.7\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","to":"user"},{"seq":37,"ends":null,"r":[373.5,602.1,244.2,115.4],"svg":"<g><path d=\"M378.8 607.0 L612.6 609.6 L607.5 708.9 L382.5 707.3\" stroke=\"none\" stroke-width=\"0\" fill=\"#e6e2ef\"><\/path><path d=\"M378.8 609.3 C458.6 611.4, 541.4 613.4, 611.7 611.9 M380.7 609.7 C442.0 608.9, 502.1 610.1, 610.5 608.7 M611.1 608.0 C606.3 642.4, 606.6 675.4, 608.3 712.4 M608.9 610.4 C609.8 645.2, 611.0 682.2, 609.7 710.5 M609.1 711.0 C544.2 712.9, 478.1 710.9, 380.0 708.2 M609.0 708.8 C538.8 710.6, 467.7 710.3, 380.4 709.0 M382.3 707.6 C379.5 690.7, 377.1 665.7, 379.2 607.4 M379.0 711.2 C382.8 676.2, 381.4 642.7, 380.2 609.0\" stroke=\"#4a3f8c\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"embedding-model","node":5},{"seq":39,"ends":null,"r":[712.3,602.6,124,115.3],"svg":"<g><path d=\"M717.2 612.2 L827.9 612.0 L828.5 707.9 L717.6 706.9\" stroke=\"none\" stroke-width=\"0\" fill=\"#ede2d5\"><\/path><path d=\"M719.1 609.1 C758.2 614.5, 795.7 610.9, 831.2 607.6 M719.1 611.3 C743.8 611.7, 767.7 610.7, 828.6 609.5 M830.2 612.3 C828.7 636.0, 833.0 665.7, 830.1 710.2 M830.5 611.2 C828.4 642.8, 830.0 678.4, 828.4 710.8 M829.8 712.8 C791.6 707.3, 756.1 707.2, 720.4 707.0 M831.2 708.8 C806.3 712.1, 780.1 709.5, 719.2 708.9 M718.0 709.0 C723.1 685.3, 719.7 660.6, 719.2 608.8 M719.0 708.7 C720.2 680.1, 720.4 653.6, 720.6 609.0\" stroke=\"#6e554a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"inverted-index","parent":"index-store","node":6},{"seq":41,"ends":null,"r":[832.3,603.6,125.6,114.2],"svg":"<g><path d=\"M837.2 611.2 L949.8 608.6 L949.3 712.2 L841.7 711.2\" stroke=\"none\" stroke-width=\"0\" fill=\"#ede2d5\"><\/path><path d=\"M840.1 610.0 C870.3 610.8, 895.8 610.4, 948.0 609.7 M839.6 610.9 C868.4 610.7, 896.7 612.2, 950.0 610.6 M952.7 610.6 C947.2 634.1, 944.7 651.8, 952.8 708.8 M948.7 611.4 C952.8 641.6, 951.3 671.6, 950.7 710.7 M950.3 710.7 C919.7 708.6, 883.5 711.6, 838.4 712.2 M951.0 709.7 C912.8 709.8, 874.5 708.5, 839.4 709.6 M840.5 712.8 C839.3 683.5, 838.5 654.3, 842.5 608.9 M839.4 709.2 C839.9 673.9, 838.8 638.0, 841.2 608.7\" stroke=\"#6e554a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"vector-store","parent":"index-store","node":7},{"seq":43,"ends":null,"r":[1052.2,601.8,245.7,116],"svg":"<g><path d=\"M1062.3 610.1 L1289.8 610.9 L1289.2 711.9 L1059.0 710.6\" stroke=\"none\" stroke-width=\"0\" fill=\"#e6e2ef\"><\/path><path d=\"M1061.7 612.6 C1105.5 609.1, 1155.8 609.5, 1287.7 607.5 M1059.9 609.4 C1124.8 605.5, 1189.5 606.0, 1291.2 610.8 M1290.8 607.1 C1294.7 643.0, 1292.0 675.2, 1290.4 710.5 M1288.9 609.2 C1291.0 633.1, 1290.9 657.4, 1288.6 709.5 M1292.5 709.7 C1209.1 711.3, 1130.9 714.0, 1058.6 710.3 M1290.5 709.9 C1217.4 712.3, 1143.9 711.4, 1060.2 710.1 M1057.7 712.8 C1058.6 686.1, 1058.8 662.7, 1057.1 612.8 M1060.4 711.5 C1061.0 674.8, 1059.4 641.3, 1059.1 611.0\" stroke=\"#4a3f8c\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"ranking-model","node":8},{"seq":45,"ends":null,"r":[1393,602,244.3,117.1],"svg":"<g><path d=\"M1398.0 610.0 L1630.7 610.3 L1630.8 713.0 L1401.3 709.4\" stroke=\"none\" stroke-width=\"0\" fill=\"#ede2d5\"><\/path><path d=\"M1398.7 611.6 C1470.9 606.2, 1544.3 605.7, 1632.0 608.8 M1399.8 610.9 C1483.4 612.4, 1569.3 613.3, 1630.5 611.2 M1632.2 608.7 C1628.9 651.9, 1628.0 688.0, 1628.8 713.1 M1630.1 609.9 C1631.5 643.5, 1632.8 679.7, 1629.0 709.7 M1627.4 709.1 C1563.3 715.3, 1499.8 715.4, 1399.8 710.3 M1629.1 710.5 C1539.9 710.5, 1452.2 712.5, 1399.5 709.7 M1398.3 709.5 C1402.4 680.9, 1402.1 644.6, 1400.4 607.8 M1400.6 710.5 C1402.2 674.1, 1400.1 638.9, 1399.3 611.2\" stroke=\"#6e554a\" stroke-width=\"2.4\" fill=\"none\"><\/path><\/g>","grp":null,"id":"forward-store","parent":"index-store","node":9},{"seq":47,"ends":[495,608,495,454],"r":[482.8,448.4,25.8,165.4],"svg":"<g><path d=\"M493.3 608.7 C491.2 569.7, 494.2 533.2, 493.4 456.3 M494.4 607.8 C494.4 554.1, 493.4 502.7, 493.9 453.3\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M495.6 453.7 C495.2 457.2, 498.0 459.6, 503.6 465.9 M494.0 453.5 C496.2 457.0, 498.5 459.7, 502.5 465.7\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M496.5 455.0 C491.3 459.5, 490.6 462.5, 488.0 465.0 M494.1 454.4 C492.1 458.8, 490.6 462.5, 487.8 465.9\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"embedding-model","to":"query-understanding"},{"seq":50,"ends":[775,608,775,454],"r":[761.7,447.2,25.4,167.4],"svg":"<g><path d=\"M777.0 609.6 C776.8 569.7, 777.7 528.0, 777.6 452.2 M775.0 607.4 C775.4 564.1, 776.9 522.4, 774.0 453.8\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M776.2 454.7 C777.9 460.2, 780.8 463.7, 781.3 464.8 M775.4 453.8 C776.9 458.1, 779.7 462.8, 782.0 465.7\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M776.6 454.1 C773.0 456.6, 770.0 460.5, 766.6 464.6 M775.8 454.0 C771.8 458.7, 771.2 461.0, 768.6 466.5\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"inverted-index","to":"recall"},{"seq":53,"ends":[895,608,895,454],"r":[882.4,447.8,24.2,168],"svg":"<g><path d=\"M896.1 610.7 C893.8 552.8, 890.2 501.5, 893.2 453.1 M895.8 607.6 C896.5 570.3, 896.5 535.7, 894.2 454.2\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M895.2 453.3 C896.0 458.9, 900.0 461.9, 901.6 465.4 M895.5 454.1 C898.1 458.4, 899.6 461.5, 901.0 465.5\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M895.3 452.7 C892.3 457.0, 890.5 459.6, 888.3 467.4 M895.7 453.0 C892.1 457.6, 889.6 461.5, 887.4 465.8\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"vector-store","to":"recall"},{"seq":56,"ends":[1175,608,1175,454],"r":[1161.3,446.7,26.2,166],"svg":"<g><path d=\"M1175.5 607.7 C1172.8 549.8, 1172.9 494.4, 1172.7 451.7 M1174.9 607.1 C1175.3 554.7, 1173.3 500.2, 1175.7 452.8\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1175.5 452.3 C1176.7 455.2, 1179.2 461.7, 1180.8 464.9 M1175.6 453.2 C1176.9 456.3, 1177.1 458.6, 1182.4 465.3\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1173.7 453.1 C1171.8 457.3, 1169.0 463.7, 1166.2 464.3 M1174.8 453.5 C1173.5 456.3, 1170.6 461.3, 1168.1 465.6\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"ranking-model","to":"ranking"},{"seq":59,"ends":[1515,608,1515,454],"r":[1502.6,448.3,25.3,163.8],"svg":"<g><path d=\"M1513.3 606.6 C1515.9 558.2, 1512.2 505.5, 1513.0 453.6 M1514.6 607.0 C1515.5 557.0, 1514.4 505.8, 1514.9 454.6\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1513.3 454.2 C1515.1 457.5, 1517.2 458.8, 1520.4 466.1 M1514.9 453.9 C1517.5 457.3, 1518.4 459.6, 1522.9 465.3\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g><g><path d=\"M1515.3 453.2 C1513.0 458.4, 1509.1 464.0, 1507.6 467.5 M1514.1 453.4 C1511.4 459.2, 1510.2 463.9, 1508.9 465.5\" stroke=\"#3a3530\" stroke-width=\"2\" fill=\"none\"><\/path><\/g>","grp":"arrow","from":"forward-store","to":"assembly"}],"texts":[{"seq":1,"r":[70,41,608.7,49],"t":[70,41,608.7,49],"txt":"在线检索 · 一次搜索请求的链路","html":"在线检索 · 一次搜索请求的链路","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:44px;font-weight:700;font-style:normal;line-height:49px;color:rgb(42, 37, 32);text-align:start;letter-spacing:normal;white-space:nowrap;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":44,"grp":"title"},{"seq":2,"r":[70,98,617.8,25],"t":[70,98,617.8,25],"txt":"Query 理解 → 多路召回 → 排序 → 结果组装 · 全链路毫秒级响应","html":"Query 理解 → 多路召回 → 排序 → 结果组装 · 全链路毫秒级响应","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:22px;font-weight:400;font-style:normal;line-height:25px;color:rgb(90, 84, 79);text-align:start;letter-spacing:normal;white-space:nowrap;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":22,"grp":"subtitle"},{"seq":4,"r":[70,365.3,200,28],"t":[147,366.3,46,25],"txt":"用户","html":"用户","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(31, 85, 130);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"user","node":0},{"seq":4,"r":[70,396.4,200,18.3],"t":[132.5,397.4,75,16],"txt":"输入查询词","html":"输入查询词","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(31, 85, 130);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"user","node":0},{"seq":6,"r":[380,365.3,230,28],"t":[423.4,366.3,143.1,25],"txt":"① Query 理解","html":"① Query 理解","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(160, 74, 31);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"query-understanding","node":1},{"seq":6,"r":[380,396.4,230,18.3],"t":[422.5,397.4,145,16],"txt":"分词 · 纠错 · 意图识别","html":"分词 · 纠错 · 意图识别","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(160, 74, 31);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"query-understanding","node":1},{"seq":8,"r":[720,365.3,230,28],"t":[774.6,366.3,120.8,25],"txt":"② 多路召回","html":"② 多路召回","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(160, 74, 31);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"recall","node":2},{"seq":8,"r":[720,396.4,230,18.3],"t":[753.3,397.4,163.5,16],"txt":"关键词 + 向量 · 千条候选","html":"关键词 + 向量 · 千条候选","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(160, 74, 31);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"recall","node":2},{"seq":10,"r":[1060,365.3,230,28],"t":[1137.6,366.3,74.8,25],"txt":"③ 排序","html":"③ 排序","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(160, 74, 31);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"ranking","node":3},{"seq":10,"r":[1060,396.4,230,18.3],"t":[1099.3,397.4,151.5,16],"txt":"粗排 → 精排 · 取 Top N","html":"粗排 → 精排 · 取 Top N","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(160, 74, 31);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"ranking","node":3},{"seq":12,"r":[1400,365.3,230,28],"t":[1454.6,366.3,120.8,25],"txt":"④ 结果组装","html":"④ 结果组装","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:23px;font-weight:700;font-style:normal;line-height:28.06px;color:rgb(160, 74, 31);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":23,"grp":null,"id":"assembly","node":4},{"seq":12,"r":[1400,396.4,230,18.3],"t":[1457.5,397.4,115,16],"txt":"摘要 · 高亮 · 分页","html":"摘要 · 高亮 · 分页","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(160, 74, 31);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"assembly","node":4},{"seq":17,"r":[358,269,100,22.7],"t":[364,270,68,19],"txt":"在线检索","html":"在线检索","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:700;font-style:normal;line-height:20.74px;color:rgb(160, 74, 31);text-align:left;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":17,"grp":"frame","id":"online-search"},{"seq":30,"r":[274,356,60,20.3],"t":[281.5,358,45,16],"txt":"查询词","html":"查询词","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(58, 53, 48);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":15,"grp":null},{"seq":36,"r":[840,192,130,22.7],"t":[851.9,193,106.3,19],"txt":"⑤ 搜索结果页","html":"⑤ 搜索结果页","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:17px;font-weight:400;font-style:normal;line-height:20.74px;color:rgb(58, 53, 48);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(253, 253, 250, 0.94);padding:1px 6px","op":1,"fs":17,"grp":null},{"seq":38,"r":[380,636.5,230,25.6],"t":[419.4,636.5,151.1,24],"txt":"Embedding 模型","html":"Embedding 模型","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:21px;font-weight:700;font-style:normal;line-height:25.62px;color:rgb(74, 63, 140);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":21,"grp":null,"id":"embedding-model","node":5},{"seq":38,"r":[380,665.1,230,18.3],"t":[457.5,666.1,75,16],"txt":"查询转向量","html":"查询转向量","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(74, 63, 140);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"embedding-model","node":5},{"seq":40,"r":[720,637.8,110,23.2],"t":[737,638.8,76,21],"txt":"倒排索引","html":"倒排索引","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:19px;font-weight:700;font-style:normal;line-height:23.18px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":19,"grp":null,"id":"inverted-index","parent":"index-store","node":6},{"seq":40,"r":[720,663.9,110,18.3],"t":[752.5,664.9,45,16],"txt":"关键词","html":"关键词","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"inverted-index","parent":"index-store","node":6},{"seq":42,"r":[840,637.8,110,23.2],"t":[866.5,638.8,57,21],"txt":"向量库","html":"向量库","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:19px;font-weight:700;font-style:normal;line-height:23.18px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":19,"grp":null,"id":"vector-store","parent":"index-store","node":7},{"seq":42,"r":[840,663.9,110,18.3],"t":[880,664.9,30,16],"txt":"语义","html":"语义","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"vector-store","parent":"index-store","node":7},{"seq":44,"r":[1060,636.5,230,25.6],"t":[1133,636.5,84,24],"txt":"排序模型","html":"排序模型","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:21px;font-weight:700;font-style:normal;line-height:25.62px;color:rgb(74, 63, 140);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":21,"grp":null,"id":"ranking-model","node":8},{"seq":44,"r":[1060,665.1,230,18.3],"t":[1137.5,666.1,75,16],"txt":"相关性打分","html":"相关性打分","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(74, 63, 140);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"ranking-model","node":8},{"seq":46,"r":[1400,636.5,230,25.6],"t":[1483.5,636.5,63,24],"txt":"正排库","html":"正排库","css":"font-family:\"Times New Roman\", Times, STZhongsong, 华文中宋, \"Songti SC\", SimSun, 宋体, \"Noto Serif SC\", serif;font-size:21px;font-weight:700;font-style:normal;line-height:25.62px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":1,"fs":21,"grp":null,"id":"forward-store","parent":"index-store","node":9},{"seq":46,"r":[1400,665.1,230,18.3],"t":[1457.5,666.1,115,16],"txt":"标题 · 摘要 · 字段","html":"标题 · 摘要 · 字段","css":"font-family:\"Times New Roman\", Times, \"Songti SC\", STSong, SimSun, 宋体, \"Noto Serif SC\", serif;font-size:15px;font-weight:400;font-style:normal;line-height:18.3px;color:rgb(110, 85, 74);text-align:center;letter-spacing:normal;white-space:normal;background:rgba(0, 0, 0, 0);padding:0px","op":0.85,"fs":15,"grp":null,"id":"forward-store","parent":"index-store","node":9}],"images":[],"nodes":[{"shapes":[0],"texts":[2,3],"id":"user","parent":null,"r":[62.1,322.5,215.4,134.4]},{"shapes":[1],"texts":[4,5],"id":"query-understanding","parent":"online-search","r":[371.9,322.3,245.6,135.5]},{"shapes":[2],"texts":[6,7],"id":"recall","parent":"online-search","r":[711.9,322.1,245.7,135]},{"shapes":[3],"texts":[8,9],"id":"ranking","parent":"online-search","r":[1052.2,322.1,245.8,134.4]},{"shapes":[4],"texts":[10,11],"id":"assembly","parent":"online-search","r":[1392.2,322.4,245.7,133.2]},{"shapes":[13],"texts":[15,16],"id":"embedding-model","parent":null,"r":[373.5,602.1,244.2,115.4]},{"shapes":[14],"texts":[17,18],"id":"inverted-index","parent":"index-store","r":[712.3,602.6,124,115.3]},{"shapes":[15],"texts":[19,20],"id":"vector-store","parent":"index-store","r":[832.3,603.6,125.6,114.2]},{"shapes":[16],"texts":[21,22],"id":"ranking-model","parent":null,"r":[1052.2,601.8,245.7,116]},{"shapes":[17],"texts":[23,24],"id":"forward-store","parent":"index-store","r":[1393,602,244.3,117.1]}]}}};</script>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+const SPEC = window.DECK.spec, DATA = window.DECK.data;
+const [W, H] = SPEC.stage || [1920, 1080];
+const DIM = SPEC.dim ?? 0.13, PAD = 28, MAX_ZOOM = SPEC.maxZoom || 1.75;
+const DUR = Object.assign({ camera: 1050, morph: 1350 }, SPEC.durations || {});
+const TIMING = SPEC.timing || {};                 // { "<id>": [start, end] }: that concept moves inside this window
+
+// ---------- Geometry ----------
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1);
+const ease = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const ctr = r => [r[0] + r[2] / 2, r[1] + r[3] / 2];
+const lerp = (a, b, e) => a + (b - a) * e;
+const lerpR = (a, b, e) => [lerp(a[0], b[0], e), lerp(a[1], b[1], e), lerp(a[2], b[2], e), lerp(a[3], b[3], e)];
+const toStage = (c, r) => [c.x + r[0] * c.s, c.y + r[1] * c.s, r[2] * c.s, r[3] * c.s];
+const toLayer = (c, r) => [(r[0] - c.x) / c.s, (r[1] - c.y) / c.s, r[2] / c.s, r[3] / c.s];
+const union = rs => { const x0 = Math.min(...rs.map(r => r[0])), y0 = Math.min(...rs.map(r => r[1]));
+  return [x0, y0, Math.max(...rs.map(r => r[0] + r[2])) - x0, Math.max(...rs.map(r => r[1] + r[3])) - y0]; };
+const within = (pt, q) => pt[0] >= q[0] && pt[0] <= q[0] + q[2] && pt[1] >= q[1] && pt[1] <= q[1] + q[3];
+
+// ---------- Slides ----------
+// focus: [x, y, w, h] in canvas px, or concept ids (["plant", "pipe-network"]) → the box around them.
+function idRects(key, ids) {
+  const D = DATA[key], rs = [];
+  for (const id of ids) {
+    D.nodes.forEach(n => n.id === id && rs.push(n.r));
+    D.shapes.forEach(s => s.id === id && s.grp === 'frame' && rs.push(s.r));
+    D.texts.forEach(t => t.id === id && t.node === undefined && rs.push(t.t));
+  }
+  return rs;
+}
+const SLIDES = SPEC.slides.map((s, i) => {
+  let f = s.focus;
+  if (typeof f === 'string') f = [f];
+  if (Array.isArray(f) && typeof f[0] === 'string') {
+    const rs = idRects(s.diagram, f);
+    if (!rs.length) console.warn(`slide ${i + 1}: focus ids ${f} not found in ${s.diagram}`);
+    f = rs.length ? union(rs) : null;
+  }
+  return { d: s.diagram, focus: f || null, note: s.note || '', hold: s.hold };
+});
+SLIDES.forEach(sl => {
+  const D = DATA[sl.d], fit = Math.min(W / D.w, H / D.h);
+  if (!sl.focus) { sl.cam = { s: fit, x: (W - D.w * fit) / 2, y: (H - D.h * fit) / 2 }; return; }
+  const [x, y, w, h] = [sl.focus[0] - PAD, sl.focus[1] - PAD, sl.focus[2] + 2 * PAD, sl.focus[3] + 2 * PAD];
+  const ax = 70, ay = 50, aw = W - 2 * ax, ah = H - 2 * ay;
+  const s = Math.min(aw / w, ah / h, fit * MAX_ZOOM);
+  sl.cam = { s, x: ax + (aw - w * s) / 2 - x * s, y: ay + (ah - h * s) / 2 - y * s };
+});
+
+// ---------- Layers: one per diagram, every shape and text line is its own element ----------
+const stage = document.getElementById('stage');
+stage.style.width = W + 'px'; stage.style.height = H + 'px';
+const LAYERS = {};
+function layer(key) {
+  if (LAYERS[key]) return LAYERS[key];
+  const D = DATA[key], el = document.createElement('div');
+  el.className = 'layer'; el.style.width = D.w + 'px'; el.style.height = D.h + 'px';
+  const atoms = [];
+  D.shapes.forEach(s => {
+    const [x, y, w, h] = s.r, e = document.createElement('div');
+    e.className = 'a';
+    e.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px`;
+    const svg = inner => `<svg width="${w}" height="${h}" viewBox="${x} ${y} ${w} ${h}">${inner}</svg>`;
+    // an arrow is its line plus its head: in flight the line stretches, the head only turns and moves
+    const gs = s.grp === 'arrow' ? s.svg.match(/<g\b[\s\S]*?<\/g>/g) || [] : [];
+    e.innerHTML = gs.length > 1 ? svg(gs[0]) + svg(gs.slice(1).join('')) : svg(s.svg);
+    const [body, head] = gs.length > 1 ? e.children : [];
+    if (head) for (const g of [body, head]) g.style.cssText = 'position:absolute;left:0;top:0;transform-origin:0 0';
+    el.appendChild(e);
+    atoms.push(s.atom = { el: e, R: s.r, T: s.r, base: 1, uni: false, src: s, kind: 'shape', body, head });
+  });
+  (D.images || []).forEach(m => {
+    const [x, y, w, h] = m.r, e = document.createElement('img');
+    e.className = 'a'; e.src = m.src; e.alt = '';
+    e.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px`;
+    el.appendChild(e);
+    atoms.push(m.atom = { el: e, R: m.r, T: m.r, base: m.op, uni: false, src: m, kind: 'image' });
+  });
+  D.texts.forEach(t => {
+    const [x, y, w, h] = t.r, e = document.createElement('div');
+    e.className = 'a';
+    e.style.cssText = `${t.css};position:absolute;left:${x - .5}px;top:${y}px;width:${w + 1}px;height:${h}px`;
+    e.innerHTML = t.html;
+    el.appendChild(e);
+    atoms.push(t.atom = { el: e, R: [x - .5, y, w + 1, h], T: t.t, base: t.op, uni: true, src: t, kind: 'text' });
+  });
+  stage.appendChild(el);
+  return LAYERS[key] = { el, atoms, D };
+}
+
+// Concepts of a diagram: nodes (box + its text), frames (+ label), arrows, and free text lines with an id.
+function model(key) {
+  const L = layer(key), D = L.D;
+  if (L.model) return L.model;
+  const items = [], byId = new Map(), arrows = [];
+  const add = it => { items.push(it); if (it.id) (byId.get(it.id) || byId.set(it.id, []).get(it.id)).push(it); };
+  D.nodes.forEach(n => {
+    const outer = D.shapes[n.shapes.at(-1)].atom;
+    add({ kind: 'node', id: n.id, parent: n.parent, outer, r: n.r,
+          copies: n.shapes.slice(0, -1).map(k => D.shapes[k].atom),
+          texts: n.texts.map(j => D.texts[j]).filter(t => !t.id || t.id === n.id).map(t => t.atom) });
+  });
+  D.shapes.forEach(s => {
+    if (s.grp === 'frame') add({ kind: 'frame', id: s.id, parent: s.parent, outer: s.atom, r: s.r,
+                                 copies: [], texts: s.label !== undefined ? [D.texts[s.label].atom] : [] });
+    if (s.grp === 'arrow') arrows.push({ id: s.id, from: s.from, to: s.to, atom: s.atom, ends: s.ends });
+  });
+  D.texts.forEach(t => {
+    const inNode = t.node !== undefined && (!t.id || t.id === D.nodes[t.node].id);
+    const isLabel = D.shapes.some(s => s.label !== undefined && D.texts[s.label] === t);
+    if (t.id && !inNode && !isLabel) add({ kind: 'text', id: t.id, parent: t.parent, outer: t.atom, r: t.t, copies: [], texts: [t.atom] });
+  });
+  return L.model = { items, byId, arrows };
+}
+
+// Opacity of an atom on a slide: everything outside the focus region is dimmed.
+function stateOp(sl, a) {
+  if (!sl.focus) return a.base;
+  const [fx, fy, fw, fh] = [sl.focus[0] - PAD, sl.focus[1] - PAD, sl.focus[2] + 2 * PAD, sl.focus[3] + 2 * PAD];
+  const r = a.T, [cx, cy] = ctr(r);
+  const ix = Math.max(0, Math.min(r[0] + r[2], fx + fw) - Math.max(r[0], fx));
+  const iy = Math.max(0, Math.min(r[1] + r[3], fy + fh) - Math.max(r[1], fy));
+  const inC = cx >= fx && cx <= fx + fw && cy >= fy && cy <= fy + fh;
+  const cover = (ix * iy) / Math.max(1, r[2] * r[3]);
+  return a.base * (inC && cover > .35 || cover > .6 ? 1 : DIM);
+}
+
+// Place an atom so that its anchor rect T lands on `cur` (layer coords). Text keeps its aspect;
+// al = 'l' / 'r' pins its left / right edge instead of its centre (lines sharing only a prefix / suffix).
+function place(a, cur, al) {
+  if (!cur) { a.el.style.transform = ''; return; }
+  const [ox, oy] = a.R, T = a.T;
+  let sx, sy, dx, dy;
+  if (a.uni) {
+    sx = sy = cur[3] / T[3];
+    const [cx, cy] = ctr(T), [nx, ny] = ctr(cur);
+    dx = al === 'l' ? cur[0] - ox - sx * (T[0] - ox) : al === 'r' ? cur[0] + cur[2] - ox - sx * (T[0] + T[2] - ox) : nx - ox - sx * (cx - ox);
+    dy = ny - oy - sy * (cy - oy);
+  } else {
+    sx = cur[2] / T[2]; sy = cur[3] / T[3];
+    dx = cur[0] - ox - sx * (T[0] - ox); dy = cur[1] - oy - sy * (T[1] - oy);
+  }
+  a.el.style.transform = `translate(${dx}px,${dy}px) scale(${sx},${sy})`;
+}
+// Place an arrow drawn from e1 to e2 so that it runs from p1 to p2. Its line stretches along its length only and
+// its head turns and moves without stretching; c scales both across the line (stroke width, head size).
+function placeSeg(a, e1, e2, p1, p2, c = 1) {
+  const len = Math.hypot(e2[0] - e1[0], e2[1] - e1[1]);
+  if (len < 1) return;
+  const s = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / len;
+  const B = Math.atan2(e2[1] - e1[1], e2[0] - e1[0]), A = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]);
+  const [ox, oy] = a.R;
+  const css = ([m11, m21, m12, m22], P, E) => {            // x -> P + M (x - E), in the element's own frame
+    const ux = ox - E[0], uy = oy - E[1];
+    return `matrix(${m11},${m21},${m12},${m22},${m11 * ux + m12 * uy + P[0] - ox},${m21 * ux + m22 * uy + P[1] - oy})`;
+  };
+  const [cA, sA, cB, sB] = [Math.cos(A), Math.sin(A), Math.cos(B), Math.sin(B)];
+  const line = [cA * s * cB + sA * c * sB, sA * s * cB - cA * c * sB, cA * s * sB - sA * c * cB, sA * s * sB + cA * c * cB];
+  if (!a.head) { a.el.style.transform = css(line, p1, e1); return; }
+  const th = A - B;
+  a.body.style.transform = css(line, p1, e1);
+  a.head.style.transform = css([c * Math.cos(th), c * Math.sin(th), -c * Math.sin(th), c * Math.cos(th)], p2, e2);
+}
+const setCam = (L, c) => { L.el.style.transform = `translate(${c.x}px,${c.y}px) scale(${c.s})`; };
+
+function setState(i) {
+  const sl = SLIDES[i], L = layer(sl.d);
+  for (const k in LAYERS) if (LAYERS[k] !== L) LAYERS[k].el.style.display = 'none';
+  L.el.style.display = 'block'; L.el.style.willChange = ''; L.el.style.zIndex = 1;
+  setCam(L, sl.cam);
+  for (const a of L.atoms) {
+    a.el.style.transform = ''; a.el.style.opacity = stateOp(sl, a); a.el.style.willChange = ''; a.el.style.zIndex = ''; a.el.classList.remove('gh');
+    if (a.head) a.body.style.transform = a.head.style.transform = '';
+  }
+}
+
+// ---------- Same diagram: camera move + focus change ----------
+function cameraTrans(A, B) {
+  const L = layer(A.d), ca = A.cam, cb = B.cam;
+  const va = [-ca.x / ca.s, -ca.y / ca.s, W / ca.s, H / ca.s], vb = [-cb.x / cb.s, -cb.y / cb.s, W / cb.s, H / cb.s];
+  const ops = L.atoms.map(a => [a, stateOp(A, a), stateOp(B, a)]).filter(([, x, y]) => x !== y);
+  L.el.style.willChange = 'transform';
+  return {
+    dur: DUR.camera,
+    apply(p) {
+      const e = ease(p), v = lerpR(va, vb, e), s = W / v[2];
+      setCam(L, { s, x: -v[0] * s, y: -v[1] * s });
+      const f = ease(seg(p, .1, .9));
+      for (const [a, x, y] of ops) a.el.style.opacity = lerp(x, y, f);
+    },
+  };
+}
+
+// ---------- Different diagrams: which element becomes which ----------
+// Text without an id still pairs when the line reads the same; a leading step number does not count.
+const bare = s => s.replace(/^(?:\d+\s*(?:·|\.|、|\)|）)|[①-⑳])\s*/, '').trim();
+function greedy(cands) {
+  cands.sort((p, q) => p[0] - q[0]);
+  const ua = new Set(), ub = new Set(), out = [];
+  for (const [, i, j] of cands) { if (ua.has(i) || ub.has(j)) continue; ua.add(i); ub.add(j); out.push([i, j]); }
+  return out;
+}
+// Returns pairs [atomA, atomB, kind, window], followers [atom, lead | 'region', side, window] that ride a moving
+// atom while fading, clones [source, atom, side] (an extra copy splits off / merges into source), and arrows.
+function match(A, B) {
+  const MA = model(A.d), MB = model(B.d);
+  const dist = (ra, rb) => { const p = ctr(toStage(A.cam, ra)), q = ctr(toStage(B.cam, rb)); return Math.hypot(p[0] - q[0], p[1] - q[1]); };
+  const pairs = [], follow = [], clones = [], usedA = new Set(), usedB = new Set(), pA = new Set(), pB = new Set();
+  const tw = (a, b) => TIMING[a.src.id] || TIMING[b.src.id] || TIMING[a.src.parent] || undefined;
+  const kindOf = (a, b) => !a.uni ? 'shape' : a.src.txt === b.src.txt ? 'text' : bare(a.src.txt) === bare(b.src.txt) ? 'right' : 'left';
+  const pair = (a, b, kind) => { if (usedA.has(a) || usedB.has(b)) return; pairs.push([a, b, kind || kindOf(a, b), tw(a, b)]); usedA.add(a); usedB.add(b); pA.add(a); pB.add(b); };
+  const fol = (atom, lead, side, win) => { const U = side === 'a' ? usedA : usedB; if (U.has(atom)) return; follow.push([atom, lead, side, win]); U.add(atom); };
+  const clone = (src, atom, side) => { const U = side === 'a' ? usedA : usedB; if (U.has(atom)) return; clones.push([src, atom, side]); U.add(atom); (side === 'a' ? pA : pB).add(atom); };
+  const OUT = [0, .3], IN = [.58, 1];
+  const winOf = side => side === 'a' ? OUT : IN;
+  const done = new Set();                                // items already matched as a whole
+
+  // text lines of two matched concepts: identical lines fly, the two headings cross-fade in place, the rest fade
+  function pairLines(ta0, tb0, leadA, leadB) {
+    const ta = ta0.filter(a => !usedA.has(a)), tb = tb0.filter(b => !usedB.has(b));
+    greedy(ta.flatMap((a, i) => tb.map((b, j) => bare(a.src.txt) === bare(b.src.txt) ? [dist(a.T, b.T), i, j] : null).filter(Boolean)))
+      .forEach(([i, j]) => pair(ta[i], tb[j]));
+    const [ha] = ta0, [hb] = tb0;                        // the headings of the two forms
+    if (ha && hb && !usedA.has(ha) && !usedB.has(hb)) pair(ha, hb, 'left');
+    ta.forEach(a => fol(a, leadA, 'a', OUT));
+    tb.forEach(b => fol(b, leadB, 'b', IN));
+  }
+  function pairItems(x, y) {
+    done.add(x); done.add(y);
+    if (x.kind === 'text' && y.kind !== 'text') {        // a line here is a whole box there: the box grows around it
+      const head = y.texts[0];
+      if (head) { pair(x.outer, head); [y.outer, ...y.copies, ...y.texts.slice(1)].forEach(b => fol(b, head, 'b', [.3, .85])); }
+      else pair(x.outer, y.outer, 'shape');
+      return;
+    }
+    if (y.kind === 'text' && x.kind !== 'text') {
+      const head = x.texts[0];
+      if (head) { pair(head, y.outer); [x.outer, ...x.copies, ...x.texts.slice(1)].forEach(a => fol(a, head, 'a', [.1, .6])); }
+      else pair(x.outer, y.outer, 'shape');
+      return;
+    }
+    if (x.kind === 'text') { pair(x.outer, y.outer); return; }
+    pair(x.outer, y.outer, 'shape');
+    const n = Math.min(x.copies.length, y.copies.length);
+    for (let k = 0; k < n; k++) pair(x.copies.at(-1 - k), y.copies.at(-1 - k), 'shape');
+    x.copies.slice(0, x.copies.length - n).forEach(a => fol(a, x.outer, 'a', OUT));
+    y.copies.slice(0, y.copies.length - n).forEach(b => fol(b, y.outer, 'b', IN));
+    pairLines(x.texts, y.texts, x.outer, y.outer);
+  }
+
+  // 1. same id on both sides; extra copies on one side split off (or merge into) their partner
+  for (const [id, la0] of MA.byId) {
+    const lb0 = MB.byId.get(id);
+    if (!lb0) continue;
+    const la = la0.filter(x => !done.has(x)), lb = lb0.filter(y => !done.has(y));
+    const m = greedy(la.flatMap((x, i) => lb.map((y, j) => [dist(x.r, y.r), i, j])));
+    m.forEach(([i, j]) => pairItems(la[i], lb[j]));
+    const mp = m.map(([i, j]) => [la[i], lb[j]]);
+    const gap = (r, q) => Math.hypot(ctr(r)[0] - ctr(q)[0], ctr(r)[1] - ctr(q)[1]);
+    const nearest = (it, k) => mp.reduce((best, pr) => !best || gap(pr[k].r, it.r) < gap(best[k].r, it.r) ? pr : best, null);
+    lb.filter(y => !done.has(y)).forEach(y => { const [x] = nearest(y, 1); done.add(y); clone(x.outer, y.outer, 'b');
+      [...y.copies, ...y.texts].forEach(b => fol(b, y.outer, 'b', [.4, .9])); });
+    la.filter(x => !done.has(x)).forEach(x => { const [, y] = nearest(x, 0); done.add(x); clone(y.outer, x.outer, 'a');
+      [...x.copies, ...x.texts].forEach(a => fol(a, x.outer, 'a', [.2, .6])); });
+  }
+
+  // 2. a concept with no partner but a declared parent: it lives inside the parent here,
+  //    or it splits off the parent drawn on the other side (and merges back on the way there)
+  const adopt = (M, O, side) => M.items.forEach(it => {
+    if (done.has(it) || !it.parent) return;
+    const own = (M.byId.get(it.parent) || []).find(p => (side === 'a' ? pA : pB).has(p.outer));
+    const other = (O.byId.get(it.parent) || [])[0];
+    if (own) { done.add(it); [it.outer, ...it.copies, ...it.texts].forEach(a => fol(a, own.outer, side, side === 'a' ? [.05, .5] : [.35, .9])); }
+    else if (other) { done.add(it); clone(other.outer, it.outer, side); [...it.copies, ...it.texts].forEach(a => fol(a, it.outer, side, side === 'a' ? [.2, .6] : [.4, .9])); }
+  });
+  adopt(MA, MB, 'a'); adopt(MB, MA, 'b');
+
+  // 3. no ids: the same text line on both sides (legend only pairs with legend; titles with titles)
+  const LA = layer(A.d), LB = layer(B.d);
+  const freeT = (Lr, U) => Lr.atoms.filter(a => a.kind === 'text' && !U.has(a));
+  const ta = freeT(LA, usedA), tb = freeT(LB, usedB);
+  const grpOf = a => a.src.grp === 'legend' ? 'legend' : a.src.grp === 'title' || a.src.grp === 'subtitle' ? 'title' : '';
+  greedy(ta.flatMap((a, i) => tb.map((b, j) => bare(a.src.txt) === bare(b.src.txt) && grpOf(a) === grpOf(b) ? [dist(a.T, b.T), i, j] : null).filter(Boolean)))
+    .forEach(([i, j]) => pair(ta[i], tb[j]));
+  // ... and the same picture
+  const ia = LA.atoms.filter(a => a.kind === 'image' && !usedA.has(a)), ib = LB.atoms.filter(b => b.kind === 'image' && !usedB.has(b));
+  greedy(ia.flatMap((a, i) => ib.map((b, j) => a.src.src === b.src.src ? [dist(a.T, b.T), i, j] : null).filter(Boolean)))
+    .forEach(([i, j]) => pair(ia[i], ib[j], 'shape'));
+
+  // 4. a concept that only shares a text line: its box and other lines grow / shrink around that line
+  const ride = (M, P, side, win) => M.items.forEach(it => {
+    if (done.has(it)) return;
+    const lead = it.texts.find(a => P.has(a));
+    if (lead) { done.add(it); [it.outer, ...it.copies, ...it.texts].forEach(a => a !== lead && fol(a, lead, side, win)); }
+  });
+  ride(MA, pA, 'a', [.15, .6]); ride(MB, pB, 'b', [.35, .85]);
+
+  // 5. arrows: same id, else the same two concepts (an end may sit on a part of the concept the other side
+  //    shows whole: source → plant ≈ source → first step inside the plant); every arrow keeps its ends on its concepts
+  const parentOf = new Map();
+  for (const M of [MA, MB]) M.items.forEach(it => it.id && it.parent && !parentOf.has(it.id) && parentOf.set(it.id, it.parent));
+  const chain = id => { const out = []; for (let k = id, n = 0; k && n < 20; k = parentOf.get(k), n++) out.push(k); return out; };
+  const endCost = (a, b) => !a || !b ? -1 : a === b ? 0 : chain(b).includes(a) || chain(a).includes(b) ? 1 : -1;
+  const arrows = [];
+  const fa = MA.arrows.filter(r => !usedA.has(r.atom)), fb = MB.arrows.filter(r => !usedB.has(r.atom));
+  const mate = new Map();
+  greedy(fa.flatMap((x, i) => fb.map((y, j) => {
+    if (x.id && y.id) return x.id === y.id ? [dist(x.atom.T, y.atom.T), i, j] : null;
+    const c1 = endCost(x.from, y.from), c2 = endCost(x.to, y.to);
+    return c1 < 0 || c2 < 0 ? null : [(c1 + c2) * 1e5 + dist(x.atom.T, y.atom.T), i, j];
+  }).filter(Boolean))).forEach(([i, j]) => mate.set(fa[i], fb[j]));
+  fa.forEach(r => { usedA.add(r.atom); arrows.push({ r, side: 'a', mate: mate.get(r) || null }); });
+  const mated = new Set(mate.values());
+  fb.forEach(r => { usedB.add(r.atom); arrows.push({ r, side: 'b', mate: mated.has(r) ? r : null }); });
+
+  // 6. details only one side shows: they grow out of (or shrink into) the smallest moving shape around them;
+  //    with no such shape, they ride the region both slides describe (zoom in / out)
+  const settle = (Lr, P, U, side, win, winR) => {
+    const boxes = Lr.atoms.filter(a => a.kind === 'shape' && P.has(a));
+    for (const a of Lr.atoms) {
+      if (U.has(a)) continue;
+      const c = ctr(a.T), area = a.T[2] * a.T[3];
+      let best = null;
+      for (const b of boxes) {
+        const q = b.T;
+        if (b !== a && q[2] * q[3] > area * 1.2 && within(c, q) && (!best || q[2] * q[3] < best.T[2] * best.T[3])) best = b;
+      }
+      fol(a, best || 'region', side, best ? win : winR);
+    }
+  };
+  settle(LA, pA, usedA, 'a', [.05, .5], [0, .45]);
+  settle(LB, pB, usedB, 'b', [.35, .9], [.4, 1]);
+  return { pairs, follow, clones, arrows, MA, MB };
+}
+
+// The part of each canvas both slides talk about: the box around the concepts they share (moved, split or
+// merged). With too little in common to tell, the focus region or the whole canvas.
+function regionOf(sl, atoms) {
+  const D = DATA[sl.d], full = sl.focus || [0, 0, D.w, D.h];
+  if (atoms.length < 2) return full;
+  const u = union(atoms.map(a => a.T));
+  return u[2] * u[3] < .03 * D.w * D.h ? full : u;
+}
+
+const hasBg = a => a.uni && /background:/.test(a.src.css) && !/background:\s*(rgba\(0, 0, 0, 0\)|transparent)/.test(a.src.css);
+function magicTrans(A, B) {
+  const LA = layer(A.d), LB = layer(B.d);
+  setCam(LA, A.cam); setCam(LB, B.cam);
+  LA.el.style.display = LB.el.style.display = 'block';
+  LA.el.style.zIndex = 1; LB.el.style.zIndex = 2;
+  const { pairs, follow, clones, arrows, MA, MB } = match(A, B);
+  const moved = new Set(), tracks = [], leads = new Map();
+  const track = (a, b, kind, tw) => {
+    const al = kind === 'left' ? 'l' : kind === 'right' ? 'r' : null;
+    const ta = { atom: a, from: a.T, to: toLayer(A.cam, toStage(B.cam, b.T)), al, tw };
+    const tb = { atom: b, from: toLayer(B.cam, toStage(A.cam, a.T)), to: b.T, al, tw };
+    // identical text: the incoming copy takes over early and the pair keeps a constant combined opacity;
+    // shapes and differing lines: a plain cross-fade while they overlap mid-flight
+    // a label on a paper patch (frame titles) only takes over at the end, so no patch flies over the boxes
+    const bgA = hasBg(a), bgB = hasBg(b);
+    const win = kind === 'text' ? (bgB && !bgA ? [.6, .95] : [.05, .45]) : al ? (bgB && !bgA ? [.55, .9] : bgA && !bgB ? [.1, .45] : [.3, .7]) : [.2, .65];
+    tracks.push({ ta, tb, kind, oA: stateOp(A, a), oB: stateOp(B, b), win });
+    leads.set(a, ta); leads.set(b, tb); moved.add(a); moved.add(b);
+  };
+  for (const [a, b, kind, tw] of pairs) track(a, b, kind, tw);
+  // copies that split off one box come out of their own part of it, already laid out as they will land
+  const part = new Map();
+  for (const [src, atom, side] of clones) {
+    const sib = clones.filter(c => c[0] === src && c[2] === side).map(c => c[1]);
+    const U = union(sib.map(a => a.T)), S = src.T, r = atom.T;
+    part.set(atom, sib.length < 2 ? S : [S[0] + (r[0] - U[0]) / U[2] * S[2], S[1] + (r[1] - U[1]) / U[3] * S[3], r[2] / U[2] * S[2], r[3] / U[3] * S[3]]);
+  }
+  const solo = clones.map(([src, atom, side]) => {
+    const t = side === 'b'
+      ? { atom, from: toLayer(B.cam, toStage(A.cam, part.get(atom))), to: atom.T, o0: 0, o1: stateOp(B, atom), win: [.15, .6] }
+      : { atom, from: atom.T, to: toLayer(A.cam, toStage(B.cam, part.get(atom))), o0: stateOp(A, atom), o1: 0, win: [.35, .8] };
+    leads.set(atom, t); moved.add(atom);
+    return t;
+  });
+  const shared = side => [...pairs.map(p => p[side === 'a' ? 0 : 1]), ...clones.filter(c => c[2] === side).map(c => c[1]),
+                           ...clones.filter(c => c[2] !== side).map(c => c[0])].filter(a => !a.uni);
+  const RA = regionOf(A, shared('a')), RB = regionOf(B, shared('b'));
+  const region = {
+    a: { from: RA, to: toLayer(A.cam, toStage(B.cam, RB)), atom: { T: RA } },
+    b: { from: toLayer(B.cam, toStage(A.cam, RA)), to: RB, atom: { T: RB } },
+  };
+  const at = (t, p) => t.rect ? t.rect(p) : lerpR(t.from, t.to, t.tw ? ease(seg(p, t.tw[0], t.tw[1])) : ease(p));
+  const followers = follow.map(([f, lead, side, win]) => {
+    moved.add(f);
+    const L = lead === 'region' ? region[side] : leads.get(lead), T = L.atom.T;
+    const fl = { atom: f, side, win, o: side === 'a' ? stateOp(A, f) : stateOp(B, f) };
+    fl.rect = p => {                                     // keep its place inside the lead, scale uniformly
+      const c = at(L, p), sx = c[2] / T[2], sy = c[3] / T[3], s = Math.sqrt(sx * sy);
+      const [fx, fy] = ctr(f.T), nx = c[0] + (fx - T[0]) * sx, ny = c[1] + (fy - T[1]) * sy;
+      const w = f.T[2] * s, h = f.T[3] * s;
+      return [nx - w / 2, ny - h / 2, w, h];
+    };
+    leads.set(f, fl);
+    return fl;
+  });
+  // arrow ends ride the concept they touch (wherever its box is going), else the region
+  const anchorOf = (M, id, side) => {
+    const it = id && (M.byId.get(id) || []).find(x => leads.has(x.outer));
+    return it ? leads.get(it.outer) : region[side];
+  };
+  const wires = arrows.map(({ r, side, mate }) => {
+    const M = side === 'a' ? MA : MB, sl = side === 'a' ? A : B;
+    moved.add(r.atom);
+    const e1 = [r.ends[0], r.ends[1]], e2 = [r.ends[2], r.ends[3]];
+    const k1 = anchorOf(M, r.from, side), k2 = anchorOf(M, r.to, side);
+    const rel = (k, e) => [(e[0] - k.atom.T[0]) / k.atom.T[2], (e[1] - k.atom.T[1]) / k.atom.T[3]];
+    const o = stateOp(sl, r.atom);
+    return { atom: r.atom, r, mate, e1, e2, k1, k2, u1: rel(k1, e1), u2: rel(k2, e2), side, cam: sl.cam, o,
+             o0: side === 'a' ? o : 0, o1: side === 'a' ? 0 : o, win: side === 'a' ? [0, .35] : [.55, 1] };
+  });
+  // a matched pair runs along one shared line (from where the old one starts to where the new one ends),
+  // the new arrow drawn over the old one: two arrows never show side by side
+  const wireOf = new Map(wires.filter(w => w.side === 'b').map(w => [w.r, w]));
+  for (const w of wires) if (w.side === 'a' && w.mate) { w.partner = wireOf.get(w.mate); w.partner.partner = w; }
+  const ptS = (c, q) => [c.x + q[0] * c.s, c.y + q[1] * c.s], ptL = (c, q) => [(q[0] - c.x) / c.s, (q[1] - c.y) / c.s];
+  const ends = (w, p) => { const c1 = at(w.k1, p), c2 = at(w.k2, p);
+    return [ptS(w.cam, [c1[0] + w.u1[0] * c1[2], c1[1] + w.u1[1] * c1[3]]), ptS(w.cam, [c2[0] + w.u2[0] * c2[2], c2[1] + w.u2[1] * c2[3]])]; };
+  const still = [
+    ...LA.atoms.filter(a => !moved.has(a)).map(a => ({ atom: a, o0: stateOp(A, a), o1: 0, win: [0, .4] })),
+    ...LB.atoms.filter(a => !moved.has(a)).map(a => ({ atom: a, o0: 0, o1: stateOp(B, a), win: [.52, 1] })),
+  ];
+  // while things fly past each other, smaller shapes stay on top of bigger ones and text on top of shapes
+  for (const L of [LA, LB]) {
+    L.atoms.filter(a => !a.uni).sort((p, q) => q.T[2] * q.T[3] - p.T[2] * p.T[3]).forEach((a, i) => { a.el.style.zIndex = i + 1; });
+    L.atoms.filter(a => a.uni).forEach(a => { a.el.style.zIndex = 9999; });
+  }
+  for (const a of moved) a.el.style.willChange = 'transform, opacity';
+  for (const k of tracks) if (k.ta.atom.uni) { k.ta.atom.el.classList.add('gh'); k.tb.atom.el.classList.add('gh'); }
+  for (const a of LB.atoms) a.el.style.opacity = 0;
+  return {
+    dur: DUR.morph, tracks, wires,
+    apply(p) {
+      const lvl = ease(seg(p, .1, .9));
+      for (const k of tracks) {
+        place(k.ta.atom, at(k.ta, p), k.ta.al);
+        place(k.tb.atom, at(k.tb, p), k.tb.al);
+        const L = lerp(k.oA, k.oB, lvl), x = ease(seg(p, k.win[0], k.win[1]));
+        let oa = L * (1 - x), ob = L * x;
+        if (k.kind === 'text') oa = ob >= .999 ? 0 : (L - ob) / (1 - ob);   // over-the-top: top + bottom·(1−top) = L
+        k.ta.atom.el.style.opacity = oa; k.tb.atom.el.style.opacity = ob;
+      }
+      for (const t of solo) {
+        place(t.atom, at(t, p));
+        t.atom.el.style.opacity = lerp(t.o0, t.o1, ease(seg(p, t.win[0], t.win[1])));
+      }
+      for (const f of followers) {
+        place(f.atom, f.rect(p));
+        const q = ease(seg(p, f.win[0], f.win[1]));
+        f.atom.el.style.opacity = f.o * (f.side === 'a' ? 1 - q : q);
+      }
+      const e = ease(p), scr = Math.pow(A.cam.s, 1 - e) * Math.pow(B.cam.s, e);   // on-screen scale of a stroke
+      const at1 = new Map(wires.map(w => [w, ends(w, p)]));
+      for (const w of wires) {
+        let [q1, q2] = at1.get(w);
+        if (w.partner) {
+          const [a1, a2] = at1.get(w.side === 'a' ? w : w.partner), [b1, b2] = at1.get(w.side === 'a' ? w.partner : w);
+          q1 = [lerp(a1[0], b1[0], e), lerp(a1[1], b1[1], e)]; q2 = [lerp(a2[0], b2[0], e), lerp(a2[1], b2[1], e)];
+        }
+        placeSeg(w.atom, w.e1, w.e2, ptL(w.cam, q1), ptL(w.cam, q2), scr / w.cam.s);
+        if (!w.partner) { w.atom.el.style.opacity = lerp(w.o0, w.o1, ease(seg(p, w.win[0], w.win[1]))); continue; }
+        if (w.side === 'b') continue;
+        const L = lerp(w.o, w.partner.o, lvl), ob = L * ease(seg(p, .3, .7));
+        w.partner.atom.el.style.opacity = ob;
+        w.atom.el.style.opacity = ob >= .999 ? 0 : (L - ob) / (1 - ob);            // together they keep level L
+      }
+      for (const s of still) s.atom.el.style.opacity = lerp(s.o0, s.o1, ease(seg(p, s.win[0], s.win[1])));
+    },
+    done() { for (const L of [LA, LB]) for (const a of L.atoms) a.el.classList.remove('gh'); },
+  };
+}
+
+// ---------- Driver ----------
+let cur = 0, tr = null;
+function makeTrans(i, j) {
+  const A = SLIDES[i], B = SLIDES[j];
+  return Object.assign(A.d === B.d ? cameraTrans(A, B) : magicTrans(A, B), { i, j });
+}
+function finish() { if (!tr) return; tr.apply(1); if (tr.done) tr.done(); setState(tr.j); tr = null; }
+function go(j) {
+  j = clamp(j, 0, SLIDES.length - 1);
+  if (tr) finish();
+  if (j === cur) return;
+  const i = cur; cur = j;
+  history.replaceState(null, '', '#' + (j + 1));
+  const t = tr = makeTrans(i, j);
+  const t0 = performance.now();
+  const tick = now => {
+    if (tr !== t) return;
+    const p = Math.min(1, (now - t0) / t.dur);
+    t.apply(p);
+    if (p < 1) requestAnimationFrame(tick); else finish();
+  };
+  requestAnimationFrame(tick);
+}
+function fitStage() {
+  const s = Math.min(innerWidth / W, innerHeight / H);
+  stage.style.transform = `translate(${(innerWidth - W * s) / 2}px,${(innerHeight - H * s) / 2}px) scale(${s})`;
+}
+addEventListener('resize', fitStage);
+addEventListener('keydown', e => {
+  if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(e.key)) { e.preventDefault(); go(cur + 1); }
+  else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(e.key)) { e.preventDefault(); go(cur - 1); }
+  else if (e.key === 'Home') go(0);
+  else if (e.key === 'End') go(SLIDES.length - 1);
+  else if (e.key === 'f' || e.key === 'F') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+});
+addEventListener('click', e => go(e.clientX < innerWidth * .2 ? cur - 1 : cur + 1));
+
+// ---------- Hooks for deck/check.py and deck/record.py ----------
+// freeze(i, j, p): show transition i → j at progress p (p = 1 ends it); repeated calls reuse one transition.
+// Returns the transition's duration in ms, so a recording keeps the on-screen timing.
+const visible = (sl, a) => {                     // fully shown on this slide and on screen
+  if (stateOp(sl, a) < .9 * a.base || a.base < .5) return false;
+  const r = toStage(sl.cam, a.T), c = ctr(r);
+  return c[0] > 0 && c[0] < W && c[1] > 0 && c[1] < H;
+};
+window.__deck = {
+  SLIDES, go, setState, W, H,
+  freeze(i, j, p) {
+    if (!(tr && tr.i === i && tr.j === j)) { finish(); cur = i; setState(i); tr = makeTrans(i, j); }
+    const dur = tr.dur; tr.apply(p); if (p >= 1) { finish(); cur = j; }
+    return dur;
+  },
+  // What a transition between two different diagrams does with each concept.
+  inspect(i, j) {
+    const A = SLIDES[i], B = SLIDES[j];
+    if (A.d === B.d) return { camera: true };
+    const m = match(A, B), pa = new Set(m.pairs.map(p => p[0])), pb = new Set(m.pairs.map(p => p[1]));
+    const ca = new Set(m.clones.filter(c => c[2] === 'a').map(c => c[1])), cb = new Set(m.clones.filter(c => c[2] === 'b').map(c => c[1]));
+    const fa = new Map(m.follow.filter(f => f[2] === 'a').map(f => [f[0], f[1]])), fb = new Map(m.follow.filter(f => f[2] === 'b').map(f => [f[0], f[1]]));
+    const movesA = x => pa.has(x.outer) || ca.has(x.outer) || (fa.has(x.outer) && fa.get(x.outer) !== 'region' && x.kind !== 'text');
+    const movesB = y => pb.has(y.outer) || cb.has(y.outer) || (fb.has(y.outer) && fb.get(y.outer) !== 'region' && y.kind !== 'text');
+    const shown = (sl, M, id) => (M.byId.get(id) || []).some(x => visible(sl, x.outer));
+    const both = [...m.MA.byId.keys()].filter(id => m.MB.byId.has(id) && (shown(A, m.MA, id) || shown(B, m.MB, id)));
+    const lost = both.filter(id => !(m.MA.byId.get(id).some(movesA) && m.MB.byId.get(id).some(movesB)));
+    const LA = layer(A.d), LB = layer(B.d);
+    const gone = LA.atoms.filter(a => a.kind === 'text' && !pa.has(a) && !ca.has(a) && visible(A, a));
+    const born = LB.atoms.filter(b => b.kind === 'text' && !pb.has(b) && !cb.has(b) && visible(B, b));
+    const bornTxt = new Set(born.map(b => bare(b.src.txt)));
+    const reappear = [...new Set(gone.filter(a => a.src.grp !== 'legend' && bornTxt.has(bare(a.src.txt))).map(a => a.src.txt))];
+    return { camera: false, sharedIds: both, lostIds: lost, reappearingText: reappear,
+             morphedArrows: m.arrows.filter(w => w.side === 'a' && w.mate).length,
+             pairedTexts: [...pa].filter(a => a.kind === 'text').length, newTexts: born.length, goneTexts: gone.length };
+  },
+  // Readability of a resting slide: smallest on-screen font size among the lines it shows, and how much is new.
+  stats(i) {
+    const sl = SLIDES[i], L = layer(sl.d);
+    const shown = L.atoms.filter(a => a.kind === 'text' && visible(sl, a));
+    const px = a => +(a.src.fs * sl.cam.s).toFixed(1);
+    // lines to read: new ones, and ones the camera just moved onto (an overview line only got a glance)
+    let fresh = shown.length;
+    if (i > 0) {
+      const P = SLIDES[i - 1];
+      if (P.d === sl.d) fresh = shown.filter(a => !(P.focus && visible(P, a))).length;
+      else { const m = match(P, sl), pb = new Map(m.pairs.map(p => [p[1], p[0]]));
+             fresh = shown.filter(b => !(pb.has(b) && visible(P, pb.get(b)))).length; }
+    }
+    const small = shown.filter(a => px(a) < (SPEC.minFontPx || 12)).map(a => [a.src.txt.slice(0, 40), px(a)]);
+    return { lines: shown.length, newLines: fresh, minPx: shown.length ? Math.min(...shown.map(px)) : null, small };
+  },
+  // On-screen boxes of the text lines currently visible (stage px), tagged with their transition partner.
+  textBoxes() {
+    const s = stage.getBoundingClientRect(), k = s.width / W, out = [];
+    const partner = new Map();
+    if (tr && tr.tracks) tr.tracks.forEach((t, n) => { partner.set(t.ta.atom, n); partner.set(t.tb.atom, n); });
+    for (const key in LAYERS) {
+      const L = LAYERS[key];
+      if (L.el.style.display === 'none') continue;
+      for (const a of L.atoms) {
+        if (a.kind !== 'text') continue;
+        const o = +a.el.style.opacity;
+        if (!(o > .35)) continue;
+        // the element may be as wide as its box (centred labels); map the glyphs' own box through its transform
+        const r = a.el.getBoundingClientRect(), sx = r.width / a.R[2], sy = r.height / a.R[3];
+        const g = [r.left + (a.T[0] - a.R[0]) * sx, r.top + (a.T[1] - a.R[1]) * sy, a.T[2] * sx, a.T[3] * sy];
+        out.push({ key: key + ':' + L.atoms.indexOf(a), txt: a.src.txt.slice(0, 40), op: o, pair: partner.has(a) ? partner.get(a) : null,
+                   r: [(g[0] - s.left) / k, (g[1] - s.top) / k, g[2] / k, g[3] / k] });
+      }
+    }
+    return out;
+  },
+};
+
+fitStage();
+cur = clamp((parseInt(location.hash.slice(1), 10) || 1) - 1, 0, SLIDES.length - 1);
+document.fonts.ready.then(() => { setState(cur); window.__ready = true; });
+</script>
+</body>
+</html>
